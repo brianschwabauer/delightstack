@@ -26,7 +26,7 @@
 	import { type Snippet } from 'svelte';
 	import { focusTrap, generateID, ripple } from '@delightstack/utilities';
 	import Button from './Button.svelte';
-	import { scrollbar } from './scrollbar';
+	import { scrollbar } from './scrollbar.js';
 
 	let {
 		/** Title text displayed as the dialog header */

@@ -2044,9 +2044,15 @@
 		border: none;
 		outline: none;
 		/* The wrapper outline is the focus indicator — neutralise any focus
-		   ring a host app applies to bare controls (e.g. a global
-		   `*:focus-visible { box-shadow }` rule). */
+		   ring a host app applies to bare controls, whichever property it uses:
+		   a global `*:focus-visible { box-shadow }` rule, or an `outline` one.
+		   Restated on :focus-visible because `.field` beats `*:focus-visible` on
+		   specificity today and would stop doing so if either selector moved. */
 		box-shadow: none;
+		&:focus-visible {
+			outline: none;
+			box-shadow: none;
+		}
 		background: transparent;
 		font: inherit;
 		font-size: var(--_font);

@@ -55,6 +55,24 @@
 			"svelte": "./dist/media/index.js",
 			"import": "./dist/media/index.js"
 		},
+		"./display/Corkboard.svelte": {
+			"types": "./dist/display/Corkboard.svelte.d.ts",
+			"svelte": "./dist/display/Corkboard.svelte",
+			"import": "./dist/display/Corkboard.svelte"
+		},
+		"./display/corkboard-model": {
+			"types": "./dist/display/corkboard-model.d.ts",
+			"import": "./dist/display/corkboard-model.js"
+		},
+		"./display/code-tokens": {
+			"types": "./dist/display/code-tokens.d.ts",
+			"import": "./dist/display/code-tokens.js"
+		},
+		"./display/Code.svelte": {
+			"types": "./dist/display/Code.svelte.d.ts",
+			"svelte": "./dist/display/Code.svelte",
+			"import": "./dist/display/Code.svelte"
+		},
 		"./media/Carousel.svelte": {
 			"svelte": "./dist/media/Carousel.svelte",
 			"import": "./dist/media/Carousel.svelte"
@@ -68,6 +86,7 @@
 			"import": "./dist/media/Image.svelte"
 		},
 		"./media/Video.svelte": {
+			"types": "./dist/media/Video.svelte.d.ts",
 			"svelte": "./dist/media/Video.svelte",
 			"import": "./dist/media/Video.svelte"
 		},
@@ -117,6 +136,7 @@
 		"vitest": "^3.2.1"
 	},
 	"dependencies": {
+		"@delightstack/diff": "workspace:*",
 		"@delightstack/utilities": "workspace:*",
 		"thumbhash": "^0.1.1"
 	},

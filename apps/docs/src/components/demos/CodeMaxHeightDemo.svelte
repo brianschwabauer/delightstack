@@ -1,5 +1,5 @@
 <script>
-	import { Code } from '@delightstack/components/display';
+	import Code from '@delightstack/components/display/Code.svelte';
 
 	const longCode = `def fibonacci(n):
     """Calculate the nth Fibonacci number."""

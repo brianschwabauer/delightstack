@@ -117,6 +117,27 @@ import type { SelectOption, TableColumn, TreeNode, CalendarEvent } from '@deligh
 The package also ships its full `.svelte` sources in `dist/`, so editors (and AI agents) get
 JSDoc descriptions for every prop.
 
+## Testing
+
+Most of the package's logic lives in **pure modules** exported alongside the components —
+`diff-model.ts`, `selection.ts` — and those carry the bulk of the tests: no runes, no DOM,
+nothing to mount, and rules that can be asserted line by line.
+
+There is no DOM test environment here. When a behaviour genuinely belongs to the *component* and
+not to its model, render it on the server and assert the markup:
+
+```ts
+import { render } from 'svelte/server';
+import DiffViewer from './DiffViewer.svelte';
+
+const html = render(DiffViewer, { props: { hunks } }).body;
+```
+
+`DiffViewer.test.ts` is the precedent — it checks which way a move's arrows point, which is a
+question about where two rows sit relative to each other on the page and so has no answer in the
+model. Reach for this only for that kind of case; if the assertion can be made against a pure
+model instead, make it there.
+
 ## AI coding agents
 
 Set up Claude Code, Cursor, Codex, and friends to use this library correctly in one command from

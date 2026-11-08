@@ -6,10 +6,46 @@ export { default as Calendar } from './Calendar.svelte';
 export { default as Chart } from './Chart.svelte';
 export type { ChartData, Dataset as ChartDataset } from './Chart.svelte';
 export type { CalendarEvent, MarkedDate } from './Calendar.svelte';
-export { default as Code } from './Code.svelte';
-export { tokenizeLine, type Token as CodeToken } from './code-tokens.js';
+// `Code` is deliberately NOT re-exported here — Corkboard's stance, applied
+// retroactively (DS-13 in DelightWrite's docs/14): its tokenizer's top-level
+// tables defeat purity analysis, so a barrel edge to it puts ~3KB gzipped into
+// whatever chunk eagerly imports `./display`, used or not. Name the file
+// export: `@delightstack/components/display/Code.svelte`.
+// `tokenizeLine` is deliberately NOT value-re-exported here — Corkboard's
+// stance, one module deeper (DS-13 in DelightWrite's docs/14): the tokenizer's
+// top-level tables defeat purity analysis, so the moment any consumer uses
+// `Code`, a barrel edge to it drags ~3KB gzipped into whatever chunk eagerly
+// imports `./display`. Name it by its file export:
+// `@delightstack/components/display/code-tokens`.
+export type { Token as CodeToken } from './code-tokens.js';
 export { default as Comparison } from './Comparison.svelte';
+// `Corkboard` is deliberately NOT re-exported here. Without a `sideEffects`
+// declaration a barrel's modules ride in whatever chunk imports the barrel
+// (DS-13 in DelightWrite's docs/14, measured): every consumer whose shell
+// eagerly imports `./display` for `SplitPane` or `Tree` would ship the whole
+// board in its boot payload whether or not anything renders one. A corkboard
+// is a view-level component, so it gets the per-component export path DS-13
+// asks for, from birth: `@delightstack/components/display/Corkboard.svelte`
+// and `…/display/corkboard-model`.
 export { default as Counter } from './Counter.svelte';
+export { default as DiffViewer } from './DiffViewer.svelte';
+export {
+	buildDiffModel,
+	hunksFromText,
+	mergeRowOps,
+	nextChange as nextDiffChange,
+	previousChange as previousDiffChange,
+	sectionize as sectionizeDiff,
+	tokenizeGraphemes,
+	type BuildDiffModelOptions,
+	type DiffGranularity,
+	type DiffHunk,
+	type DiffHunkKind,
+	type DiffModel,
+	type DiffRow,
+	type DiffSection,
+	type DiffStats,
+} from './diff-model.js';
 export { default as Expand } from './Expand.svelte';
 export { default as List } from './List.svelte';
 export { default as ListItem } from './ListItem.svelte';

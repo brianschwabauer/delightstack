@@ -1,6 +1,6 @@
 <!-- svelte-ignore state_referenced_locally -->
 <script lang="ts" module>
-	export type { CarouselItem, CarouselItemType, GalleryGesture } from './carousel';
+	export type { CarouselItem, CarouselItemType, GalleryGesture } from './carousel.js';
 </script>
 
 <script lang="ts">
@@ -31,7 +31,7 @@
 		type Point,
 		type Pointer,
 		type Transform,
-	} from './carousel';
+	} from './carousel.js';
 
 	const browser = typeof window !== 'undefined';
 

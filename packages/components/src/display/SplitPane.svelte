@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { type Snippet } from 'svelte';
-	import { scrollbar } from '../actions/scrollbar';
+	import { scrollbar } from '../actions/scrollbar.js';
 
 	const propId = $props.id();
 	let {

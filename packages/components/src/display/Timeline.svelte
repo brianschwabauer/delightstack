@@ -21,7 +21,7 @@
 
 <script lang="ts">
 	import { intersectionObserver, ripple } from '@delightstack/utilities';
-	import { scrollbar } from '../actions/scrollbar';
+	import { scrollbar } from '../actions/scrollbar.js';
 	import { getContext, setContext, untrack, type Component, type Snippet } from 'svelte';
 	import { fade, type TransitionConfig } from 'svelte/transition';
 	import { backOut } from 'svelte/easing';

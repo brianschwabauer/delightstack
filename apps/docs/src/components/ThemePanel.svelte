@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button } from '@delightstack/components/actions';
-	import { Code, Expand } from '@delightstack/components/display';
+	import { Expand } from '@delightstack/components/display';
+	import Code from '@delightstack/components/display/Code.svelte';
 	import { Input, Select } from '@delightstack/components/form';
 	import {
 		theme,

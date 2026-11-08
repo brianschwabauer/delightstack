@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { decodeThumbHash } from './carousel';
+	import { decodeThumbHash } from './carousel.js';
 
 	type ImageState = 'loading' | 'loaded' | 'error';
 

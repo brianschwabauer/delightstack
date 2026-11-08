@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Attachment } from 'svelte/attachments';
-	import { scrollbar } from '../actions/scrollbar';
+	import { scrollbar } from '../actions/scrollbar.js';
 	import { tokenizeLine } from './code-tokens.js';
 
 	const propId = $props.id();

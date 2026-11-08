@@ -1,0 +1,259 @@
+---
+title: DiffViewer
+description: A word-level diff of two texts, inline or side-by-side, with line numbers, collapsed context and keyboard navigation.
+---
+
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import DiffViewerDemo from '../../../../components/demos/DiffViewerDemo.svelte';
+import DiffViewerSideBySideDemo from '../../../../components/demos/DiffViewerSideBySideDemo.svelte';
+import DiffViewerGranularityDemo from '../../../../components/demos/DiffViewerGranularityDemo.svelte';
+import DiffViewerContextDemo from '../../../../components/demos/DiffViewerContextDemo.svelte';
+import DiffViewerHunksDemo from '../../../../components/demos/DiffViewerHunksDemo.svelte';
+import DiffViewerMovedDemo from '../../../../components/demos/DiffViewerMovedDemo.svelte';
+
+`DiffViewer` renders the difference between two texts the way a person reads it: whole words
+marked, not characters, because prose reflows and a character diff of a rewritten sentence is
+confetti. It is built on [`@delightstack/diff`](/packages/overview/) and inherits the type of
+whatever it sits in, so a diff of a document is set in the document's own face.
+
+## Import
+
+```svelte
+import { DiffViewer } from '@delightstack/components';
+```
+
+## Basic Usage
+
+<ComponentPreview code={`<script>
+${'  '}import { DiffViewer } from '@delightstack/components';
+
+${'  '}let mode = $state('inline');
+</script>
+
+<DiffViewer before={old_text} after={new_text} {mode} />`}>
+  <DiffViewerDemo client:load />
+</ComponentPreview>
+
+## Examples
+
+### Side by side
+
+Two columns, each line level with its opposite number. A line that exists on only one side leaves
+the other cell empty rather than shifting everything below it.
+
+The alignment is anchored on the text the two sides share: every `equal` span lands in one line on
+each side, and those pairs are the spine. Lines between two anchors have no shared text, so they
+pair from the top of the gap — which is how a wholly rewritten line stays one row instead of
+becoming a deletion followed by an insertion.
+
+<ComponentPreview code={`<DiffViewer
+${'  '}before={draft_2}
+${'  '}after={draft_3}
+${'  '}mode="side-by-side"
+${'  '}label_before="Draft 2"
+${'  '}label_after="Draft 3"
+/>`}>
+  <DiffViewerSideBySideDemo client:load />
+</ComponentPreview>
+
+### Granularity
+
+`word` is the default and is what prose wants. `char` finds the letter inside a word — useful for
+spellings, identifiers and numbers. `line` marks whole lines and nothing inside them, which is the
+right unit for code, logs and configuration.
+
+<ComponentPreview code={`<DiffViewer {before} {after} granularity="char" show_line_numbers={false} />`}>
+  <DiffViewerGranularityDemo client:load />
+</ComponentPreview>
+
+### Collapsed context
+
+A long unchanged stretch collapses to an expander. `context_lines` sets how many unchanged lines
+survive either side of a change; `Infinity` collapses nothing.
+
+<ComponentPreview code={`<DiffViewer {before} {after} context_lines={2} />`}>
+  <DiffViewerContextDemo client:load />
+</ComponentPreview>
+
+### Pre-aligned hunks
+
+A text diff has no notion of identity, so it cannot tell a moved paragraph from a deletion and an
+unrelated insertion. A caller that *does* know which parts correspond — blocks paired by id, rows
+paired by primary key — passes `hunks` instead of `before` / `after`, and the alignment it worked
+out is the alignment that gets rendered.
+
+<ComponentPreview code={`const hunks = [
+${'  '}{
+${'    '}kind: 'moved',
+${'    '}key: 'blk-b',
+${'    '}before: 'The keeper had a daughter.',
+${'    '}after: 'The keeper had a daughter.',
+${'    '}before_index: 1,
+${'    '}after_index: 0,
+${'  '}},
+${'  '}{ kind: 'replace', key: 'blk-a', before: old_paragraph, after: new_paragraph },
+${'  '}{ kind: 'insert', key: 'blk-c', after: 'Nobody came down to the harbour.' },
+];`}>
+  <DiffViewerHunksDemo client:load />
+</ComponentPreview>
+
+### Moved blocks
+
+A move has two ends and a reader needs both: where the text went, and the hole it left. Pass two
+`moved` hunks sharing `before_index` / `after_index` — one with `stub: true`, placed where the old
+document had the span, and the span itself, placed where the new document has it. The span is
+drawn once, at the destination, with a **Moved from line N** marker; the stub is one dimmed line
+saying **Moved to line N**, with a dashed rule down its leading edge.
+
+The old side's line numbers belong to the stub, because that is where the old document put the
+text; the span keeps only its new ones. Set `changed` when the text moved on as well, and the word
+diff runs inside the span as usual.
+
+Both ends carry the `⇅` glyph and an arrow pointing at the other end, so a move is legible
+without reading its colour — which matters here more than anywhere, since additions and deletions
+have already spent green and red.
+
+<ComponentPreview code={`const moved = {
+${'  '}key: 'blk-b',
+${'  '}before: 'The keeper had a daughter, and she kept the light.',
+${'  '}before_index: 1,
+${'  '}after_index: 3,
+${'  '}changed: true,
+};
+
+const hunks = [
+${'  '}{ kind: 'equal', before: opening, after: opening },
+${'  '}{ kind: 'moved', ...moved, stub: true },
+${'  '}{ kind: 'equal', before: second, after: second },
+${'  '}{ kind: 'insert', key: 'blk-d', after: 'Nobody came down to the harbour.' },
+${'  '}{ kind: 'moved', ...moved, after: 'The keeper had a daughter, and she kept the light burning.' },
+];`}>
+  <DiffViewerMovedDemo client:load />
+</ComponentPreview>
+
+## Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `before` | `string` | `''` | The old text. Ignored when `hunks` is given. |
+| `after` | `string` | `''` | The new text. Ignored when `hunks` is given. |
+| `hunks` | `DiffHunk[]` | `undefined` | Pre-aligned spans. Takes precedence over `before` / `after`. |
+| `mode` | `'inline' \| 'side-by-side'` | `'inline'` | One column with both sides woven together, or two columns. |
+| `granularity` | `'word' \| 'char' \| 'line'` | `'word'` | How text inside a changed span is compared. |
+| `context_lines` | `number` | `3` | Unchanged lines kept either side of a change. `Infinity` collapses nothing. |
+| `wrap` | `boolean` | `true` | Wrap long lines instead of scrolling sideways. |
+| `show_line_numbers` | `boolean` | `true` | Draw the old and new line numbers in the gutter. |
+| `label_before` | `string` | `'Before'` | Column heading for the old side, in `side-by-side`. |
+| `label_after` | `string` | `'After'` | Column heading for the new side, in `side-by-side`. |
+| `max_height` | `string` | `undefined` | Height at which the diff starts to scroll. |
+| `id` | `string` | auto | Element ID. |
+| `class` | `string` | `''` | Additional CSS classes. |
+
+## The hunk model
+
+A `DiffHunk` is one aligned span of the two documents.
+
+```ts
+interface DiffHunk {
+  kind: 'equal' | 'insert' | 'delete' | 'replace' | 'moved';
+  before?: string;    // required for every kind but 'insert'
+  after?: string;     // required for every kind but 'delete'
+  key?: string;       // your identity for this span, echoed onto its rows
+  before_index?: number; // where it sat in the old sequence  — 'moved' only
+  after_index?: number;  // where it sits in the new sequence — 'moved' only
+  changed?: boolean;  // the span moved and its text changed  — 'moved' only
+  stub?: boolean;     // the placeholder at the old position  — 'moved' only
+}
+```
+
+`hunksFromText(before, after)` builds the whole-document case: a single `replace` hunk, which is
+what the component does for you when you pass the two strings.
+
+> **A `moved` hunk on its own still renders in place, marked.** The pair is only drawn as a move
+> when you pass a stub alongside it — see [Moved blocks](#moved-blocks). Every row of either end
+> carries `moved`, `moved_from`, `moved_to`, `moved_stub`, `moved_head`, `moved_changed` and the
+> two resolved line numbers, and `data-moved` is `from` on the stub and `to` on the span.
+
+## The model, on its own
+
+Everything the component renders comes from a pure module with no runes and no DOM, exported
+alongside it. Use it to compute a diff on a server, in a worker, or in a test.
+
+```ts
+import {
+  buildDiffModel,
+  hunksFromText,
+  mergeRowOps,
+  nextDiffChange,
+  previousDiffChange,
+  sectionizeDiff,
+  tokenizeGraphemes,
+} from '@delightstack/components/display';
+
+const model = buildDiffModel(hunksFromText(old_text, new_text), {
+  granularity: 'word',
+  context_lines: 3,
+});
+
+model.rows; // every line, with both sides and both line numbers
+model.sections; // the same rows, grouped into shown and collapsed runs
+model.stats; // { added, removed, changed, moved, unchanged }
+model.changes; // row indices n / p step through, in order
+model.changes_set; // the same indices as a Set, for "is this row a change?"
+model.changed; // false when every row is an unmoved equal
+```
+
+| Export | Description |
+| --- | --- |
+| `buildDiffModel(hunks, options)` | Hunks → rows, sections, counts |
+| `hunksFromText(before, after)` | The whole-document case, as one hunk |
+| `mergeRowOps(row)` | A row's two sides woven back into one stream, for inline rendering |
+| `sectionizeDiff(rows, context_lines)` | Group rows into shown and collapsed runs |
+| `nextDiffChange(model, row)` / `previousDiffChange(model, row)` | Step through the changes, wrapping |
+| `tokenizeGraphemes(text)` | Lossless split into user-perceived characters |
+
+## Keyboard
+
+| Key | Action |
+| --- | --- |
+| `Tab` | Focus the diff, which is scrollable and therefore focusable |
+| `n` | Next change |
+| `p` | Previous change |
+
+Each end of a move is its own stop, even when the stub and the span end up touching — which is
+what two adjacent blocks swapping produces. Folding them into one run would land on the stub, say
+"moved to line 3", and then skip line 3.
+
+## Accessibility
+
+- The diff is a real `<table>`. Insertions are `<ins>`, deletions are `<del>`.
+- Every changed row carries a visually hidden **Added** / **Removed** / **Changed** / **Moved**
+  label ahead of its text, because `<ins>` and `<del>` are announced inconsistently and "what
+  changed on this line" is the question being asked.
+- The table's caption is a visually hidden summary of the counts and the two shortcuts.
+- Line numbers are drawn with `content: attr(...)` on `aria-hidden` cells, so they are neither
+  read out in front of every line nor copied along with the text.
+- Colour is never the only signal: insertions are underlined, deletions are struck through, and
+  both ends of a move carry a `⇅` glyph and a direction arrow.
+- A moved row's hidden label names the other end — **Moved to line 12**, **Moved from line 4,
+  changed** — so the pair can be followed without seeing the two markers at once. The arrow beside
+  it points at the other end's *row*, not at the larger line number: the two ends count their
+  lines in two different documents, and a big deletion between them inverts the numbers.
+- The move colour is rotated 40° off `--color-action` rather than borrowed from it, so a moved
+  block does not read as an interactive affordance, and both markers' text is clamped into a
+  legible lightness band — 5.8:1 and 5.0:1 in light, 4.9:1 in dark.
+
+## CSS Variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `--diff-font` | `inherit` | The face the diff is set in. Inheriting is usually right. |
+| `--insert` | `--color-success` | Insertion colour. |
+| `--delete` | `--color-error` | Deletion colour. |
+| `--insert-bg` | derived, 16% alpha | Insertion ground. |
+| `--delete-bg` | derived, 16% alpha | Deletion ground. |
+| `--moved` | `--color-action`, hue +40 | Move colour — a rule, a ground, a chip. Rotated off the action colour rather than borrowed, so a move does not read as something you can click. |
+| `--moved-fg` | derived, lightness clamped | The marker's text. `--moved` is a surface colour and fails 4.5:1 as small type; this clamps it into a legible band, as `--color-action-fg` does for `--color-action`. |
+| `--moved-bg` | derived, 12% alpha | Move ground, on both ends. |
+| `--gutter` | `3.25rem` | Width of a line-number column. |
+| `--radius` | `--radius-lg` | Container radius, doubled where `corner-shape: squircle` is supported. |

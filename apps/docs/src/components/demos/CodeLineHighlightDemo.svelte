@@ -1,5 +1,5 @@
 <script>
-	import { Code } from '@delightstack/components/display';
+	import Code from '@delightstack/components/display/Code.svelte';
 
 	const snippet = `function calculateTotal(items) {
   let total = 0;

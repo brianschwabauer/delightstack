@@ -182,7 +182,7 @@
 	import type { Snippet } from 'svelte';
 	import { tick, flushSync } from 'svelte';
 	import { ripple } from '@delightstack/utilities';
-	import { scrollbar } from '../actions/scrollbar';
+	import { scrollbar } from '../actions/scrollbar.js';
 	import { slide } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
 	import Progress from '../feedback/Progress.svelte';

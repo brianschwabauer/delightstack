@@ -1,5 +1,5 @@
 <script>
-	import { Code } from '@delightstack/components/display';
+	import Code from '@delightstack/components/display/Code.svelte';
 
 	const longLineCode = `// This file contains some intentionally long lines to demonstrate line wrapping behavior
 const apiEndpoint = "https://api.example.com/v2/organizations/acme-corp/projects/my-project/environments/production/deployments/latest";

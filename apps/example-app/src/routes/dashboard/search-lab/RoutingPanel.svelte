@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Button, Callout, Code, Input, Stat, toast } from '@delightstack/components';
+	import { Button, Callout, Input, Stat, toast } from '@delightstack/components';
+	import Code from '@delightstack/components/display/Code.svelte';
 	import { DelightError } from '@delightstack/utilities';
 	import type { AppDatabase } from '$lib/clients';
 	import Panel from './Panel.svelte';

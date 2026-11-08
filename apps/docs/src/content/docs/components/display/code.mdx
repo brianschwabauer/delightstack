@@ -3,7 +3,7 @@ title: Code
 description: A syntax-highlighted code block with line numbers, copy-to-clipboard, line highlighting, and diff display.
 ---
 
-import { Code as DSCode } from '@delightstack/components/display';
+import DSCode from '@delightstack/components/display/Code.svelte';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import CodeBasicDemo from '../../../../components/demos/CodeBasicDemo.svelte';
 import CodeFilenameDemo from '../../../../components/demos/CodeFilenameDemo.svelte';
@@ -16,13 +16,13 @@ import CodeSkeletonDemo from '../../../../components/demos/CodeSkeletonDemo.svel
 ## Import
 
 ```svelte
-import { Code } from '@delightstack/components';
+import Code from '@delightstack/components/display/Code.svelte';
 ```
 
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-${'  '}import { Code } from '@delightstack/components';
+${'  '}import Code from '@delightstack/components/display/Code.svelte';
 
 ${'  '}const snippet = \`function greet(name: string) {
 ${'  '}console.log(\\\`Hello, \\\${name}!\\\`);
@@ -54,7 +54,7 @@ ${'  '}filename="greeting.ts"
 Draw attention to specific lines by providing their line numbers.
 
 <ComponentPreview code={`<script>
-${'  '}import { Code } from '@delightstack/components';
+${'  '}import Code from '@delightstack/components/display/Code.svelte';
 
 ${'  '}const snippet = \`function calculateTotal(items) {
 ${'  '}let total = 0;
@@ -84,7 +84,7 @@ ${'  '}show_line_numbers={false}
 Lines starting with `+` get a green background, lines starting with `-` get a red background, and `@@` lines are styled as section headers.
 
 <ComponentPreview code={`<script>
-${'  '}import { Code } from '@delightstack/components';
+${'  '}import Code from '@delightstack/components/display/Code.svelte';
 
 ${'  '}const diffOutput = \`@@ -1,5 +1,6 @@
  function greet(name) {

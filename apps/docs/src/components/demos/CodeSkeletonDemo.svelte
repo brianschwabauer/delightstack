@@ -1,5 +1,5 @@
 <script>
-	import { Code } from '@delightstack/components/display';
+	import Code from '@delightstack/components/display/Code.svelte';
 	import { Button } from '@delightstack/components/actions';
 
 	let loading = $state(true);

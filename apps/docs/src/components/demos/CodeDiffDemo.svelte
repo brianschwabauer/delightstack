@@ -1,5 +1,5 @@
 <script>
-	import { Code } from '@delightstack/components/display';
+	import Code from '@delightstack/components/display/Code.svelte';
 
 	const diffOutput = `@@ -1,5 +1,6 @@
  function greet(name) {

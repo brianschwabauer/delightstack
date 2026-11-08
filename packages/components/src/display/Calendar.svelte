@@ -26,7 +26,7 @@
 
 <script lang="ts">
 	import { ripple } from '@delightstack/utilities';
-	import { scrollbar } from '../actions/scrollbar';
+	import { scrollbar } from '../actions/scrollbar.js';
 	const propId = $props.id();
 
 	let {

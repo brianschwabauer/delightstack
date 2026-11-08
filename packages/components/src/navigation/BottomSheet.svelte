@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { type Snippet, tick, untrack } from 'svelte';
 	import { portal } from '../actions/Portal.svelte';
-	import { scrollbar } from '../actions/scrollbar';
+	import { scrollbar } from '../actions/scrollbar.js';
 
 	/**
 	 * A snap point expressed either as a fraction of the viewport height (a value

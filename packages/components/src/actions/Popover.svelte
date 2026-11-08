@@ -22,7 +22,7 @@
 	import { focusTrap } from '@delightstack/utilities';
 	import { tick, untrack, type Snippet } from 'svelte';
 	import Portal from './Portal.svelte';
-	import { scrollbar } from './scrollbar';
+	import { scrollbar } from './scrollbar.js';
 
 	const propId = $props.id();
 	let {

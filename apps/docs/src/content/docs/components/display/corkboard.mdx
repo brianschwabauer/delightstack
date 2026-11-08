@@ -1,0 +1,162 @@
+---
+title: Corkboard
+description: A keyboard-navigable, drag-reorderable card grid with FLIP settling — index cards for anything with an order.
+---
+
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import CorkboardDemo from '../../../../components/demos/CorkboardDemo.svelte';
+import CorkboardDropDemo from '../../../../components/demos/CorkboardDropDemo.svelte';
+
+`Corkboard` lays a flat ordered list out as a grid of cards and makes the order manipulable —
+drag a card (or a multi-selection) into a gap, or pick it up with `mod`+arrows — without owning
+what a card looks like: the card's content is a snippet, and the component contributes only the
+grid, the cursor, the selection and the reorder gestures. When a drop lands, the surrounding
+cards settle into place with a FLIP animation rather than a jump.
+
+Selection follows the same shared model as `Tree`, `List` and `Table`: `shift`/`mod` click,
+`shift`+arrows to extend, `mod+a`, `escape`. The keyboard walk is genuinely two-dimensional —
+`↑`/`↓` step by the laid-out column count, whatever CSS decided it was.
+
+## Import
+
+```svelte
+import Corkboard from '@delightstack/components/display/Corkboard.svelte';
+```
+
+`Corkboard` deliberately has **no barrel export** — not from `@delightstack/components` and not
+from `./display`. Without a `sideEffects` declaration, a barrel's modules ride in whatever chunk
+imports the barrel, so a shell that eagerly imports `./display` for `SplitPane` would ship the
+whole board in its boot payload whether or not anything renders one. A corkboard is a view-level
+component; it gets the per-component export path from birth, and the pure model rides beside it:
+
+```ts
+import { planReorder } from '@delightstack/components/display/corkboard-model';
+```
+
+## Basic Usage
+
+<ComponentPreview code={`<Corkboard
+${'  '}cards={scenes}
+${'  '}bind:selected
+${'  '}reorderable
+${'  '}label_of={(s) => s.title}
+${'  '}onreorder={(plan) => commit(plan)}
+${'  '}onopen={(s) => open(s)}>
+${'  '}{#snippet card(scene)}
+${'    '}<article>
+${'      '}<h4>{scene.title}</h4>
+${'      '}<p>{scene.synopsis}</p>
+${'    '}</article>
+${'  '}{/snippet}
+</Corkboard>`}>
+  <CorkboardDemo client:load />
+</ComponentPreview>
+
+## Examples
+
+### Dropping into a card
+
+A card marked `droppable` accepts drops *onto* it as well as beside it — a folder among
+documents. The middle half of such a card means "into"; the outer quarters still mean the gap on
+that side, so a droppable card never makes the gaps beside it unreachable. The drop arrives as
+`ondropinto` with the moving ids and the target card, and it is your move to make — the board
+never mutates `cards`.
+
+<ComponentPreview code={`<Corkboard {cards} reorderable {onreorder} ondropinto={({ ids, target }) => moveInto(ids, target)}>
+${'  '}{#snippet card(item)}…{/snippet}
+</Corkboard>`}>
+  <CorkboardDropDemo client:load />
+</ComponentPreview>
+
+### Committing a reorder
+
+`onreorder` hands you a plan, not a mutation: the moved ids in screen order, the index where the
+run lands once it is out of the list, and the `before` / `after` neighbours — which is exactly
+what a fractional-key scheme wants, and enough for a splice.
+
+```ts
+function onreorder(plan: CorkboardReorderPlan) {
+  const moving = cards.filter((c) => plan.ids.includes(c.id));
+  const kept = cards.filter((c) => !plan.ids.includes(c.id));
+  cards = [...kept.slice(0, plan.index), ...moving, ...kept.slice(plan.index)];
+}
+```
+
+A plan is only produced when the drop would change something — putting a card back into its own
+gap calls nothing.
+
+## Keyboard
+
+The board is one tab stop; the cursor moves inside it and is announced through a visually hidden
+status line, named by `label_of`.
+
+| Key | Does |
+| --- | --- |
+| `↑` `↓` `←` `→` | Move the cursor (2D — `↑`/`↓` step a row) |
+| `Home` / `End` | First / last card |
+| `Enter` | `onopen` the cursor's card |
+| `Space` | Toggle the card in the selection |
+| `shift`+arrows / `shift`-click | Extend the selection as a range |
+| `mod`-click | Toggle one card |
+| `mod+a` | Select everything |
+| `escape` | Clear the selection (unclaimed when nothing is selected) |
+| `mod`+arrows | Move the cursor's card — or the whole selection — one step |
+
+Keys typed into a control *inside* a card — an inline editor, a button — are left alone, so a
+card can carry its own interaction without fighting the board.
+
+## Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `cards` | `T[]` | required | The cards, in order. `T` needs `id`; `disabled` and `droppable` are read when present. |
+| `selected` | `string[]` | `[]` | Selected ids, bindable. |
+| `cursor` | `string \| null` | `null` | The keyboard cursor's card id, bindable. |
+| `columns` | `number` | auto | Fixed column count. Unset, the grid fits as many `min_card_width` columns as it can. |
+| `min_card_width` | `number` | `220` | Minimum card width in px for the auto grid. |
+| `reorderable` | `boolean` | `false` | Enable drag and `mod`+arrow reordering. |
+| `card` | `Snippet<[T, { selected, cursor }]>` | required | One card's content. |
+| `empty` | `Snippet` | `undefined` | Rendered instead of the grid when `cards` is empty. |
+| `label_of` | `(c: T) => string` | `c.id` | How a card is named to a screen reader. |
+| `onreorder` | `(plan: CorkboardReorderPlan) => void` | `undefined` | A run of cards moved. |
+| `onopen` | `(c: T) => void` | `undefined` | `Enter` or double click on a card. |
+| `ondropinto` | `({ ids, target }) => void` | `undefined` | A run dropped onto a `droppable` card. |
+| `aria_label` | `string` | `undefined` | Accessible name for the board. |
+| `id` | `string` | auto | Element ID. |
+| `class` | `string` | `''` | Additional CSS classes. |
+
+## CSS Variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `--corkboard-gap` | `0.75rem` | Gap between cards — the drop indicator centres itself in it. |
+| `--corkboard-radius` | `8px` | Radius of the selection tint and cursor outline around a card. |
+
+## The model, on its own
+
+The grid arithmetic is a pure module exported alongside the component — no runes, no DOM — for
+consumers that drive their own board or test their own bindings.
+
+```ts
+import {
+  columnCount,    // offsetTops → laid-out column count
+  arrowTarget,    // (index, move, columns, count) → next index, clamped, never wrapping
+  moveSlot,       // the slot a mod+arrow asks for, or -1 at an edge
+  planKeyMove,    // (order, moving, move, columns) → the mod+arrow plan, measured from the run's edge
+  insertionIndex, // (over, past_midline) → slot
+  planReorder,    // (order, moving, slot) → { ids, index, before, after } | null
+  planKeyMove,    // a mod+arrow resolved end to end, stepped from the run's edge
+  dropOnCard,     // (over, past_midline, rects) → the slot plus the indicator's anchor
+  dropFromPoint,  // (x, y, rects) → the nearest slot to a pointer over the grid's gaps
+} from '@delightstack/components/display/corkboard-model';
+```
+
+## Accessibility
+
+- One tab stop; the board is the focus holder and every key is handled there, because a card may
+  carry focusable controls of its own and a `listbox`/`option` shape forbids that.
+- The cursor's card carries `aria-current="true"`, and a `role="status"` line announces it —
+  position, name (via `label_of`), and whether it is selected.
+- The FLIP settle collapses to nothing under `prefers-reduced-motion`.
+- Drag has a keyboard equivalent (`mod`+arrows) for every reorder it can perform except dropping
+  into a card — give `droppable` targets a command-shaped path of their own.

@@ -12,7 +12,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { DelightError } from '@delightstack/utilities';
-	import { scrollbar } from '../actions/scrollbar';
+	import { scrollbar } from '../actions/scrollbar.js';
 
 	const propId = $props.id();
 

@@ -95,6 +95,8 @@ have the exact types. Do not guess prop names.
 - `Code` — Syntax-highlighted code block with line numbers, copy, diff display; its line tokenizer is exported as `tokenizeLine`/`CodeToken` from `@delightstack/components/display` for external highlighters (docs: /components/display/code.md)
 - `Comparison` — Before/after image slider using CSS clip-path reveal (docs: /components/display/comparison.md)
 - `Counter` — Animated count-up/down number with scroll-into-view trigger (docs: /components/display/counter.md)
+- `Corkboard` — Keyboard-navigable, drag-reorderable card grid with FLIP settling; 2D arrow navigation, the shared multi-select model, `mod`+arrow reorder, `droppable` cards, and a pure grid model beside it. Deliberately no barrel export — import `@delightstack/components/display/Corkboard.svelte` and `…/display/corkboard-model` (docs: /components/display/corkboard.md)
+- `DiffViewer` — Word-level diff of two texts, inline or side-by-side; line numbers, collapsed context, `n`/`p` navigation, and a pure `buildDiffModel` exported alongside for pre-aligned hunks including moves (docs: /components/display/diff-viewer.md)
 - `Expand` — Animated expand/collapse container (docs: /components/display/expand.md)
 - `List` / `ListItem` — Selection-aware list; items act as buttons, radios, checkboxes, submenus (docs: /components/display/list.md, /components/display/list-item.md)
 - `QR` — QR code generator rendering crisp SVGs with colors, logo overlay, download (docs: /components/display/qr.md)

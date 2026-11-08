@@ -10,7 +10,7 @@ export {
 	normalizeCarouselItem,
 	normalizeEmbedSrc,
 	pickLargestSrc,
-} from './carousel';
+} from './carousel.js';
 export { default as Gallery } from './Gallery.svelte';
 export type {
 	GalleryDisplay,

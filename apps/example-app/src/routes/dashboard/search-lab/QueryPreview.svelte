@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Code, Expand } from '@delightstack/components';
+	import { Expand } from '@delightstack/components';
+	import Code from '@delightstack/components/display/Code.svelte';
 	import {
 		encodeSearchQuery,
 		type SearchQueryInput,

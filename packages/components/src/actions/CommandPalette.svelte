@@ -257,7 +257,7 @@
 	import { fade, scale } from 'svelte/transition';
 	import { focusTrap, ripple } from '@delightstack/utilities';
 	import { portal } from './Portal.svelte';
-	import { scrollbar } from './scrollbar';
+	import { scrollbar } from './scrollbar.js';
 
 	const propId = $props.id();
 	let {
@@ -761,8 +761,16 @@
 		border: none;
 		outline: none;
 		/* The global *:focus-visible ring reads as a stray box inside the
-		 * already-framed palette; the input-wrapper's border is the focus cue. */
+		 * already-framed palette; the input-wrapper's border is the focus cue.
+		 * Restated on :focus-visible so the suppression is a decision rather than
+		 * a specificity accident: `input` beats the global `*:focus-visible` by a
+		 * single element, and would stop doing so the day this selector gains a
+		 * parent or the global rule gains a class. */
 		box-shadow: none;
+		&:focus-visible {
+			outline: none;
+			box-shadow: none;
+		}
 		background: transparent;
 		color: var(--color-text);
 		font-size: 1rem;
