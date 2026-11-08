@@ -1,5 +1,12 @@
 # @delightstack/images
 
+## 1.1.14
+
+### Patch Changes
+
+- Updated dependencies [0bd4e50]
+  - @delightstack/database@3.0.1
+
 ## 1.1.13
 
 ### Patch Changes
