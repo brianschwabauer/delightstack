@@ -389,3 +389,120 @@ describe('restore', () => {
 		expect(pmDocFromLoro(S, doc).toJSON()).toEqual(richDoc().toJSON());
 	});
 });
+
+describe('attributes', () => {
+	/** A document whose first block is a callout, on both peers. */
+	function calloutPeers() {
+		const a = createPeer();
+		a.edit((tr) =>
+			tr.replaceWith(
+				0,
+				tr.doc.content.size,
+				S.node('callout', { callout_type: 'note', block_id: 'c1' }, [
+					S.node('paragraph', { block_id: 'p1' }, [S.text('body')]),
+				]),
+			),
+		);
+		const b_doc = new LoroDoc();
+		sync(a.doc, b_doc);
+		const b = createPeer(b_doc);
+		return { a, b };
+	}
+
+	/** `setNodeMarkup` on the callout, the way a node view's field does it. */
+	function setAttrs(peer: ReturnType<typeof createPeer>, patch: Record<string, unknown>) {
+		peer.edit((tr) => tr.setNodeMarkup(0, undefined, { ...tr.doc.child(0).attrs, ...patch }));
+	}
+
+	it('an attr-only edit is one operation, and reaches the other peer', () => {
+		const { a, b } = calloutPeers();
+		const before = a.doc.opCount();
+
+		setAttrs(a, { title: 'Mind the gap' });
+
+		// One key changed, one operation: the attribute map is a `LoroMap`, so
+		// this is a set and not a re-write of the block or its text.
+		expect(a.doc.opCount()).toBe(before + 1);
+
+		sync(a.doc, b.doc);
+		expect(b.pm_doc.child(0).attrs.title).toBe('Mind the gap');
+		// The body was not touched, and the block is the same block
+		expect(b.pm_doc.child(0).attrs.block_id).toBe('c1');
+		expect(b.pm_doc.child(0).textContent).toBe('body');
+		expect(b.pm_doc.toJSON()).toEqual(a.pm_doc.toJSON());
+	});
+
+	it('a remote attr change arrives as a markup step, not a replacement', () => {
+		const { a, b } = calloutPeers();
+		setAttrs(a, { title: 'Named' });
+		const before = b.host.dispatched.length;
+		sync(a.doc, b.doc);
+
+		expect(b.host.dispatched.length).toBe(before + 1);
+		const steps = b.host.last?.steps ?? [];
+		// One step, and not a `ReplaceStep` over the block: a replacement would
+		// throw away every cursor and selection inside the callout's body.
+		expect(steps.length).toBe(1);
+		expect(steps[0] instanceof ReplaceStep).toBe(false);
+	});
+
+	it('two peers changing different attrs of one node keep both', () => {
+		const { a, b } = calloutPeers();
+
+		setAttrs(a, { title: 'From A' });
+		setAttrs(b, { folded: true });
+		syncBoth(a.doc, b.doc);
+
+		for (const peer of [a, b]) {
+			expect(peer.pm_doc.child(0).attrs.title).toBe('From A');
+			expect(peer.pm_doc.child(0).attrs.folded).toBe(true);
+		}
+		expect(a.pm_doc.toJSON()).toEqual(b.pm_doc.toJSON());
+	});
+
+	it('two peers changing the same attr converge on one of them', () => {
+		const { a, b } = calloutPeers();
+
+		setAttrs(a, { title: 'From A' });
+		setAttrs(b, { title: 'From B' });
+		syncBoth(a.doc, b.doc);
+
+		// Last-write-wins on the key, and the only thing that matters is that
+		// both peers pick the *same* winner — the map decides, not the order the
+		// updates happened to arrive in.
+		expect(a.pm_doc.child(0).attrs.title).toBe(b.pm_doc.child(0).attrs.title);
+		expect(['From A', 'From B']).toContain(a.pm_doc.child(0).attrs.title);
+	});
+
+	it('undoes an attr change as one step, and leaves the peer’s attr alone', () => {
+		const { a, b } = calloutPeers();
+
+		setAttrs(a, { title: 'From A' });
+		setAttrs(b, { folded: true });
+		syncBoth(a.doc, b.doc);
+		expect(a.pm_doc.child(0).attrs.title).toBe('From A');
+
+		expect(undo(a.host.state, (tr) => a.host.dispatch(tr))).toBe(true);
+
+		// A's title goes back to what it was; B's fold — a different key of the
+		// same map, written concurrently — is not A's to undo.
+		expect(a.pm_doc.child(0).attrs.title).toBe('');
+		expect(a.pm_doc.child(0).attrs.folded).toBe(true);
+		expect(a.pm_doc.child(0).textContent).toBe('body');
+
+		expect(redo(a.host.state, (tr) => a.host.dispatch(tr))).toBe(true);
+		expect(a.pm_doc.child(0).attrs.title).toBe('From A');
+		expect(a.pm_doc.child(0).attrs.folded).toBe(true);
+	});
+
+	it('typing a title is one undo step per keystroke group, not per document', () => {
+		const { a } = calloutPeers();
+		setAttrs(a, { title: 'One' });
+		setAttrs(a, { title: 'Two' });
+
+		expect(undo(a.host.state, (tr) => a.host.dispatch(tr))).toBe(true);
+		expect(a.pm_doc.child(0).attrs.title).toBe('One');
+		expect(undo(a.host.state, (tr) => a.host.dispatch(tr))).toBe(true);
+		expect(a.pm_doc.child(0).attrs.title).toBe('');
+	});
+});

@@ -44,6 +44,22 @@ export const TEST_SCHEMA = new Schema({
 			attrs: { block_id: { default: null } },
 		},
 		horizontal_rule: { group: 'block', attrs: { block_id: { default: null } } },
+		/**
+		 * A block with more than one attribute worth changing on its own.
+		 * DelightWrite's callout, in shape: its `title` is an attr the node view
+		 * edits directly, so an attribute write is a first-class local edit and
+		 * not only something that rides along with a structural one.
+		 */
+		callout: {
+			content: 'block+',
+			group: 'block',
+			attrs: {
+				callout_type: { default: 'note' },
+				title: { default: '' },
+				folded: { default: null },
+				block_id: { default: null },
+			},
+		},
 		wikilink: {
 			group: 'inline',
 			inline: true,
