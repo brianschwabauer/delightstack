@@ -1,5 +1,176 @@
 # @delightstack/components
 
+## 2.0.0
+
+### Major Changes
+
+- d49cb61: `Code` leaves the barrels — DS-13's per-component path, `Corkboard`'s stance applied
+  retroactively.
+
+  - **New exports:** `@delightstack/components/display/Code.svelte` and
+    `@delightstack/components/display/code-tokens` join the `exports` map.
+  - **Removed from the `./display` (and therefore root) barrel:** `Code` and the _value_
+    re-export of `tokenizeLine` (the `CodeToken` type re-export stays — types emit nothing).
+    The tokenizer's top-level tables defeat Rollup's purity analysis, so a barrel edge to it
+    puts ~3KB gzipped into whatever chunk eagerly imports `./display`, whether or not anything
+    on that chunk draws code — measured in DelightWrite at +3.6KB of boot the moment its file
+    previews (two dynamic imports off the boot path) named `Code` through a barrel, and +4.5KB
+    through the file's own graph before the barrel edges were cut.
+  - **`./media/Video.svelte` gains a `types` entry** (DS-19's shape: a file export with no
+    `types` fails `svelte-check` at the consumer; DelightWrite's video preview hit it).
+  - **Migration:** `import Code from '@delightstack/components/display/Code.svelte'` and
+    `import { tokenizeLine } from '@delightstack/components/display/code-tokens'`. The editor's
+    `CodeBlock` and code-highlight plugin, the docs demos and the example app are updated.
+
+  Breaking for anyone importing `Code`/`tokenizeLine` from a barrel, hence the major.
+
+### Minor Changes
+
+- 1e8efb2: Design audit across the component set.
+
+  - **New:** `Button` `warning` color and `value` prop; `ButtonGroup` segmented mode (`bind:value`, optionally `translucent` for a neutral selected chip); `Table` `column_dividers` (row dividers only by default, softer than the frame); `Stat` `positive="down"` for metrics where lower is better.
+  - **Fixes:** hover popovers no longer trap focus; chart lines reach their last point; the command palette highlights the row Enter will run; Rating's half stars lose their seam; DiffViewer aligns line numbers and spaces changed words; the menu-button chevron renders; trailing icons in `Input`/`Select` sit as far from the right edge as from the top and bottom; overlapping `AvatarGroup` skeletons no longer show through each other; `ContextMenu` renders once even when mounted several times.
+  - **Toast:** the close button is a small bubble in a "liquid" notch cut into the card's corner (drawn as one SVG shape so the outline follows it).
+  - **Polish:** dark-mode surfaces use outlines instead of shadows, tab indicators ease out without overshoot, reduced-motion handling in the remaining animated controls, Calendar, Steps, Avatar, Callout, Progress, Pagination and Code refinements.
+
+- d49cb61: `Corkboard` — a keyboard-navigable, drag-reorderable card grid.
+
+  A flat ordered list laid out as a grid of cards, with the card's content left to a snippet: the
+  component contributes the grid, the cursor, the selection and the reorder gestures. Dragging a
+  card — or a multi-selection, which moves as one run in screen order — into a gap calls
+  `onreorder` with a plan (`ids`, landing `index`, `before`/`after` neighbours) rather than
+  mutating anything, and the surrounding cards settle with a FLIP animation. A card marked
+  `droppable` also accepts drops onto its middle half, reported as `ondropinto`.
+
+  The keyboard walk is genuinely 2D — `↑`/`↓` step by the laid-out column count, read back off the
+  cards, so it agrees with whatever CSS decided — and `mod`+arrows perform the same reorders the
+  drag does. Selection reuses the shared model from `selection.ts` (`shift`/`mod` click,
+  `shift`+arrows, `mod+a`, `escape`). One tab stop, `aria-current` cursor, a `role="status"`
+  announcement named by `label_of`, and keys typed into a control inside a card are left alone.
+
+  Drop geometry is honest about a grid's whole surface. A pointer over the gaps — between cards,
+  between rows, in the ragged tail — resolves to the _nearest_ slot (`dropFromPoint`: row from y
+  with ties to the nearer band, gap from the cards' midpoints), not to the end of the list. The
+  indicator is anchored on the card the pointer's row actually contains, so a slot at a row
+  boundary draws after that row's last card rather than before the next row's first; and at the
+  grid's outer boundary — where there is no gap to centre in — the bar draws flush inside the
+  card's edge instead of overhanging where a scrolling ancestor's `overflow` would clip it.
+  Keyboard reorders go through `planKeyMove`, which steps a multi-selection from the run's edge —
+  its last card moving toward the end, its first moving toward the front — so `mod`+arrow on a
+  selected run means the same move a drag of that run means, never a silent no-op measured from
+  the cursor's own other half.
+
+  The grid arithmetic ships as a pure module beside it — `columnCount`, `arrowTarget`, `moveSlot`,
+  `planKeyMove`, `insertionIndex`, `planReorder`, `planKeyMove`, `dropOnCard`, `dropFromPoint`.
+
+  **Deliberately no barrel export.** Without a `sideEffects` declaration a barrel's modules ride in
+  whatever chunk imports the barrel (DS-13's passenger tax, measured at 4.3KB gzipped of boot for
+  this component alone in DelightWrite), so `Corkboard` gets the per-component export path DS-13
+  asks for from birth: `@delightstack/components/display/Corkboard.svelte` and
+  `@delightstack/components/display/corkboard-model` are in the `exports` map; the root and
+  `./display` barrels do not name it.
+
+- d49cb61: `DiffViewer` — a word-level diff of two texts, inline or side-by-side.
+
+  Whole words are marked rather than characters, because prose reflows and a character diff of a
+  rewritten sentence is confetti; `granularity` takes `'char'` and `'line'` for the cases where the
+  unit is smaller or larger. Line numbers for both sides, a long unchanged stretch collapsed behind
+  an expander at `context_lines`, `n` / `p` to step through the changes, and `wrap` /
+  `show_line_numbers` / `max_height` for the shape of it.
+
+  A caller that knows which parts of the two documents correspond — blocks paired by a stable id,
+  rows paired by primary key — passes `hunks` instead of the two strings, and the alignment it
+  worked out is the alignment that gets rendered. That includes a `moved` kind, which a text diff
+  can never infer: it is recorded on every row it produces (`moved`, `moved_from`, `moved_to`, and
+  `data-moved` in the DOM) and rendered in place with a rule down its leading edge. Drawing the pair
+  as a move is not built.
+
+  The alignment inside a changed span is anchored on the text the two sides share: every `equal`
+  span lands in exactly one line on each side, and those pairs are the spine. Lines between two
+  anchors pair from the top of the gap, so a wholly rewritten line stays one row rather than
+  becoming a deletion followed by an insertion — and appending a line to a document leaves the line
+  above it alone, which bottom-pairing did not.
+
+  `buildDiffModel` and the rest of `diff-model.ts` are exported from
+  `@delightstack/components/display` as a pure module — no runes, no DOM — so the same rows,
+  sections and counts can be computed in a Worker or asserted in a test without mounting anything.
+  `tokenizeGraphemes` comes with it: `@delightstack/diff` has no character tokenizer, and splitting
+  by code point cuts a ZWJ family emoji into six pieces.
+
+  `@delightstack/diff` is a new dependency of the package. It carries the Myers engine, the word
+  tokenizer and the HTML renderer, all of which this uses as published — nothing was added to it.
+
+  The diff inherits the type of whatever it sits in (`--diff-font` defaults to `inherit`), so a
+  diff of a document is set in the document's own face rather than in a monospace box.
+
+  **Moves are drawn as moves.** A move has two ends and a reader needs both, so a caller that knows
+  one happened passes two `moved` hunks sharing `before_index` / `after_index`: one with
+  `stub: true`, standing where the old document had the span, and the span itself where the new one
+  has it. The span is drawn once, at the destination, labelled with the line it came from; the stub
+  is a single dimmed line saying where the text went, with a dashed rule down its leading edge. The
+  old side's line numbers go to the stub — that is where the old document put the text — so the
+  numbers under a move stay true on both sides. `changed` marks a span that was edited on the way,
+  and the word diff runs inside it as usual.
+
+  Colour is not the signal. Both ends carry a `⇅` glyph and an arrow pointing the way the text went,
+  because insertions and deletions have already spent green and red and a reader who cannot separate
+  those two hues has nothing left to read a third by. `--moved` defaults to `--color-action`:
+  `@delightstack/styles` has no info hue on purpose, and informational surfaces there are the action
+  colour.
+
+  Rows gained `moved_stub`, `moved_head`, `moved_changed`, `moved_from_line` and `moved_to_line` —
+  the last two resolved after layout, so each end can name the other's line whichever way round the
+  move landed. `data-moved` is now `from` on the stub and `to` on the span rather than an empty
+  attribute; `[data-moved]` selectors are unaffected. A `moved` hunk passed without a stub renders
+  exactly as it did before.
+
+  **Two stops per move, and a hue of its own.** `n` / `p` step to the head of each run of change,
+  which is right for eight rewritten lines in a row and wrong for a move: its two ends touch
+  whenever two adjacent blocks swap, and folding them into one run lands on the stub, says "moved to
+  line 3", and then skips line 3. Both ends are always their own stop now, and both are focusable.
+
+  The move colour is derived from `--color-action` with its hue rotated 40° rather than taken as-is.
+  Used raw it is the colour of the focus ring, the links and every other interactive affordance on
+  the page, so a marked-up region of a document reads as something you can click. `--moved-fg` is a
+  new foreground variant with its lightness clamped into a legible band — `--moved` is a surface
+  colour and fails 4.5:1 as small type, the same split `--color-action-fg` makes for
+  `--color-action`. Measured on the marker: 5.8:1 (chip) and 5.0:1 (stub) in light, 4.9:1 in dark.
+
+  A `moved` hunk with `stub: true` and no `before_index` / `after_index` now throws a `DiffError`
+  (`stub_without_indices`) in dev instead of pairing wrongly — the indices are the only thing that
+  matches a stub to its span, so every such stub folds onto one key and pairs with the wrong row.
+
+  `DiffViewer.test.ts` is the package's first component test: `render` from `svelte/server` and
+  assertions against the markup, for the one thing the pure model cannot answer — which way a move's
+  arrows point. See the README's Testing section for when that is the right tool.
+
+### Patch Changes
+
+- 0e77fe0: `BottomSheet`: content taller than the highest snap point scrolls by touch again. A sheet whose top snap was under the full screen height (the common `[0.6, 0.95]`) never counted as fully open, so its content kept `touch-action: pan-x` and an upward swipe dragged the sheet instead of scrolling; the panel was also as tall as the screen, so its last few percent sat off the bottom edge. The panel is now capped at the top snap's height, which makes that snap "fully open" and lines the scroll area up with the bottom of the screen. Also: a sheet with `blocking={false}` no longer sets `aria-modal`, so screen readers can still reach the page behind it.
+- 8d69525: Every relative import in the built `dist/` is now a complete ESM specifier.
+
+  The source files imported their siblings the way a bundler lets you — `from './error.helper'`,
+  `from './helpers'`, `from './auth.client.svelte'` — and `svelte-package` copies specifiers
+  through untouched, so the published `dist/` inherited them. Vite, esbuild and Rollup resolve
+  those by probing for extensions and `index` files; Node's ESM loader does not. So the packages
+  worked in every bundled context and failed the moment plain Node imported them — a SvelteKit
+  SSR render step, a Vitest file that had not inlined the dependency, a one-off script — with
+  `Cannot find module`.
+
+  Relative specifiers now carry `.js` (a `.svelte.ts` rune module is `./x.svelte.js`), and
+  directory imports name their `index.js`. `scripts/check-dist-specifiers.mjs`, wired into the
+  root `build` and `test`, walks every `packages/*/dist/**/*.js` and fails the build on an
+  incomplete relative specifier, so this cannot come back. No public API changed.
+
+- d5a93c8: `Modal`: on a phone the body's side padding is 1rem instead of 0.5rem, so fields and text sit at the usual 16px gutter rather than 8px from the screen edge. The in-flow footer's negative margin follows, so its divider still runs edge to edge.
+- Updated dependencies [8d69525]
+- Updated dependencies [8d69525]
+- Updated dependencies [d5e18d9]
+- Updated dependencies [a6807b5]
+  - @delightstack/diff@1.1.1
+  - @delightstack/utilities@1.2.2
+  - @delightstack/styles@1.2.0
+
 ## 1.10.0
 
 ### Minor Changes

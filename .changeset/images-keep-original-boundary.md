@@ -1,5 +1,0 @@
----
-'@delightstack/images': patch
----
-
-Fix `keep_original` never crossing the container boundary. Mode 1 (`imageProcessing`), Mode 2 (`processImage`) and the `ImageProcessorContainer.process()` RPC wrapper all dropped the flag, so the container fell back to its own default (`true`) and — with `compress_original` also defaulting `true` — emitted a compressed `original` variant through the one encode path that preserves metadata (`keepMetadata()`, EXIF and GPS included). For a `keep_original: false` caller that variant was then written to R2, *kept* by the post-processing cleanup (an output variant claimed the `original` name — the SVG guard), and listed in the record: a metadata-carrying, servable file the caller had asked to discard. The flag now passes through at every hop; `tests/exif.test.ts` pins the capture-then-strip contract against the real pipeline. Existing deployments: this fix only changes what happens from now on — any already-stored fabricated `original` (a `keep_original: false` record whose variant list names `original` for a non-SVG) stays in R2 and on the record until you delete or reprocess it.

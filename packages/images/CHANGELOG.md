@@ -1,5 +1,35 @@
 # @delightstack/images
 
+## 1.1.13
+
+### Patch Changes
+
+- 8d69525: Every relative import in the built `dist/` is now a complete ESM specifier.
+
+  The source files imported their siblings the way a bundler lets you — `from './error.helper'`,
+  `from './helpers'`, `from './auth.client.svelte'` — and `svelte-package` copies specifiers
+  through untouched, so the published `dist/` inherited them. Vite, esbuild and Rollup resolve
+  those by probing for extensions and `index` files; Node's ESM loader does not. So the packages
+  worked in every bundled context and failed the moment plain Node imported them — a SvelteKit
+  SSR render step, a Vitest file that had not inlined the dependency, a one-off script — with
+  `Cannot find module`.
+
+  Relative specifiers now carry `.js` (a `.svelte.ts` rune module is `./x.svelte.js`), and
+  directory imports name their `index.js`. `scripts/check-dist-specifiers.mjs`, wired into the
+  root `build` and `test`, walks every `packages/*/dist/**/*.js` and fails the build on an
+  incomplete relative specifier, so this cannot come back. No public API changed.
+
+- 15af24e: `date_taken` is now guaranteed canonical UTC ISO 8601, or null — never a passthrough of the EXIF spelling. `DateTimeOriginal` is a zoneless wall clock; when `OffsetTimeOriginal` names its real zone (`±HH:MM` per EXIF 2.31, or `Z`), the stored instant is corrected by it, and an unreadable or impossible offset is treated as absent rather than guessed at. Consumers compare the stored string lexicographically against UTC boundaries, so an unnormalized value silently misordered and misfiltered. Existing deployments: already-processed records keep the value the old extraction wrote (the wall clock stamped as UTC, offset ignored) — reprocess if offset-correct capture times matter to you.
+- 15af24e: Fix `keep_original` never crossing the container boundary. Mode 1 (`imageProcessing`), Mode 2 (`processImage`) and the `ImageProcessorContainer.process()` RPC wrapper all dropped the flag, so the container fell back to its own default (`true`) and — with `compress_original` also defaulting `true` — emitted a compressed `original` variant through the one encode path that preserves metadata (`keepMetadata()`, EXIF and GPS included). For a `keep_original: false` caller that variant was then written to R2, _kept_ by the post-processing cleanup (an output variant claimed the `original` name — the SVG guard), and listed in the record: a metadata-carrying, servable file the caller had asked to discard. The flag now passes through at every hop; `tests/exif.test.ts` pins the capture-then-strip contract against the real pipeline. Existing deployments: this fix only changes what happens from now on — any already-stored fabricated `original` (a `keep_original: false` record whose variant list names `original` for a non-SVG) stays in R2 and on the record until you delete or reprocess it.
+- 15af24e: Fix `keep_original: false` deleting an SVG's only variant. The SVG pipeline emits its sanitized output as a variant named `original` (SVGs get no resized variants), and the post-processing cleanup deleted the R2 key of the raw upload — the same key — leaving the record's variant list pointing at nothing. The cleanup now skips the delete when an output variant claimed the `original` name.
+- 15af24e: Close four holes in the SVG sanitizer, and extract it for unit testing. External `href`/`xlink:href` stripping was a blocklist of quoted `http(s)://` values, so protocol-relative (`//evil`), unquoted, and other-scheme references sailed through — it is now an allowlist (keep `#fragment` and inline `data:image/…`, remove everything else, `<use>` matched per element). CSS can fetch too: `url()` in `style` attributes and `<style>` blocks is neutralized unless the target is a `#fragment`, and `@import` is removed. The `DANGEROUS_URLS` guard's alternation put its colon after the whole group, so `data:text/html,<…>` (comma, the form data URLs actually take) never matched — the colon now binds per branch. The sanitizer lives in `container/src/svg-sanitize.ts` (no sharp import) with a reference test suite in `tests/svg-sanitize.test.ts`.
+- Updated dependencies [8fbf08d]
+- Updated dependencies [8fbf08d]
+- Updated dependencies [d1eeda8]
+- Updated dependencies [8d69525]
+  - @delightstack/database@3.0.0
+  - @delightstack/utilities@1.2.2
+
 ## 1.1.12
 
 ### Patch Changes

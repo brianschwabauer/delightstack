@@ -1,5 +1,32 @@
 # @delightstack/docs
 
+## 0.0.27
+
+### Patch Changes
+
+- Updated dependencies [0e77fe0]
+- Updated dependencies [d49cb61]
+- Updated dependencies [1e8efb2]
+- Updated dependencies [d49cb61]
+- Updated dependencies [d49cb61]
+- Updated dependencies [8d69525]
+- Updated dependencies [127fe66]
+- Updated dependencies [127fe66]
+- Updated dependencies [127fe66]
+- Updated dependencies [127fe66]
+- Updated dependencies [127fe66]
+- Updated dependencies [127fe66]
+- Updated dependencies [127fe66]
+- Updated dependencies [127fe66]
+- Updated dependencies [d5a93c8]
+- Updated dependencies [d5e18d9]
+- Updated dependencies [a6807b5]
+- Updated dependencies [127fe66]
+  - @delightstack/components@2.0.0
+  - @delightstack/editor@2.0.0
+  - @delightstack/presence@2.0.3
+  - @delightstack/styles@1.2.0
+
 ## 0.0.26
 
 ### Patch Changes

@@ -1,5 +1,26 @@
 # @delightstack/example-server
 
+## 0.0.25
+
+### Patch Changes
+
+- Updated dependencies [8fbf08d]
+- Updated dependencies [8fbf08d]
+- Updated dependencies [d1eeda8]
+- Updated dependencies [8d69525]
+- Updated dependencies [15af24e]
+- Updated dependencies [15af24e]
+- Updated dependencies [15af24e]
+- Updated dependencies [15af24e]
+  - @delightstack/database@3.0.0
+  - @delightstack/ai@1.1.13
+  - @delightstack/auth@1.4.1
+  - @delightstack/images@1.1.13
+  - @delightstack/presence@2.0.3
+  - @delightstack/rate-limiter@1.0.1
+  - @delightstack/utilities@1.2.2
+  - @delightstack/websocket@2.2.1
+
 ## 0.0.24
 
 ### Patch Changes
