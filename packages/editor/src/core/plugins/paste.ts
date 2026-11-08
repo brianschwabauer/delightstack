@@ -3,11 +3,18 @@ import { Fragment, Node as PMNode, Slice } from 'prosemirror-model';
 import type { EditorView } from 'prosemirror-view';
 import type { Editor } from '../editor.svelte.js';
 import { looksLikeMarkdown, parseMarkdown } from '../markdown.js';
+import type { JSONContent, MarkdownHooks } from '../../types/index.js';
 
 export const pasteKey = new PluginKey('paste');
 
 export interface PasteOptions {
-	/** Parse plain-text markdown pastes into rich content. Default true */
+	/**
+	 * Parse plain-text markdown pastes into rich content. Default true.
+	 *
+	 * This is the switch, not the dialect: which parser runs is the `markdown`
+	 * option on {@link EditorOptions} (see {@link MarkdownHooks}). Setting this
+	 * to false turns the markdown path off whether or not an app supplied one.
+	 */
 	markdown?: boolean;
 	/** Extra HTML transform applied before the built-in scrub */
 	transform_html?: (html: string) => string;
@@ -21,9 +28,24 @@ const URL_PATTERN = /^https?:\/\/\S+$/i;
  * - a URL pasted over selected text becomes a link
  * - a URL pasted on an empty paragraph becomes an embed (when a block's
  *   `paste.match_url` claims it) or a link
- * - plain text that looks like markdown is parsed into rich blocks
+ * - plain text that looks like markdown is parsed into rich blocks, by the
+ *   app's dialect when one is supplied and by the built-in parser otherwise
+ *
+ * **When the clipboard carries both `text/html` and `text/plain`, HTML wins.**
+ * Markdown is the fallback flavour, not the preferred one: an editor's own copy
+ * writes both, and its HTML carries everything the schema knows — attributes,
+ * block ids, marks a dialect has no spelling for — while its markdown is only
+ * what markdown can hold.
  */
-export function paste(editor: Editor, options: PasteOptions = {}): Plugin {
+export function paste(
+	editor: Editor,
+	options: PasteOptions = {},
+	hooks: MarkdownHooks = {},
+): Plugin {
+	const looks_like = hooks.looks_like ?? looksLikeMarkdown;
+	const app_parse = hooks.parse;
+	const parse = (text: string, view: EditorView): JSONContent | JSONContent[] | null =>
+		app_parse ? app_parse(text, { schema: view.state.schema }) : parseMarkdown(text);
 	return new Plugin({
 		key: pasteKey,
 		props: {
@@ -88,12 +110,21 @@ export function paste(editor: Editor, options: PasteOptions = {}): Plugin {
 				}
 
 				// --- markdown plain-text pastes (only when there's no HTML flavor) ---
-				if (options.markdown !== false && text && !hasHTML && looksLikeMarkdown(text)) {
-					const blocks = parseMarkdown(text);
+				if (options.markdown !== false && text && !hasHTML && looks_like(text)) {
+					const parsed = parse(text, view);
+					const blocks = parsed === null ? [] : Array.isArray(parsed) ? parsed : [parsed];
 					if (blocks.length) {
 						const nodes = jsonToNodes(view, blocks);
 						if (nodes) {
-							const tr = view.state.tr.replaceSelection(sliceFromNodes(nodes));
+							// Through `transformPasted`, like every other paste: what
+							// arrived came off the clipboard whatever its flavour was,
+							// and the block-id plugin's "an id from elsewhere is not an
+							// id" rule has to see it.
+							const parsed_slice = sliceFromNodes(nodes);
+							const slice_to_insert =
+								view.someProp('transformPasted', (f) => f(parsed_slice, view, true)) ??
+								parsed_slice;
+							const tr = view.state.tr.replaceSelection(slice_to_insert);
 							view.dispatch(tr.scrollIntoView());
 							return true;
 						}
@@ -124,6 +155,17 @@ function jsonToNodes(view: EditorView, blocks: unknown[]): PMNode[] | null {
 }
 
 function sliceFromNodes(nodes: PMNode[]): Slice {
+	// A parse that produced exactly one paragraph is an *inline* paste: the
+	// markdown was `` `code` `` or `[text](href)` or a sentence, and it belongs
+	// in the textblock the caret is in. Opening both ends is what tells
+	// `replaceSelection` to merge it there rather than to split the paragraph
+	// around it — a link pasted mid-sentence must not leave three paragraphs
+	// where there was one. Anything else (a heading, a list, two paragraphs)
+	// is structure the markdown asked for, and pastes as whole blocks.
+	const only = nodes.length === 1 ? nodes[0] : null;
+	if (only && only.type === only.type.schema.nodes.paragraph && only.isTextblock) {
+		return new Slice(Fragment.from(only), 1, 1);
+	}
 	// openStart/openEnd 0: paste as whole blocks
 	return new Slice(Fragment.from(nodes), 0, 0);
 }

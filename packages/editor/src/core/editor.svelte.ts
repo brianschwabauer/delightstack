@@ -18,18 +18,20 @@ import type {
 	BlockSpec,
 	EditorCommand,
 	JSONContent,
+	MarkdownHooks,
 	UploadState,
 	Uploader,
 } from '../types/index.js';
 import { buildSchema, type BuildSchemaOptions } from '../schema/index.js';
 import { buildKeymaps } from './keymap.js';
-import { buildInputRules } from './input-rules.js';
+import { baseInputRules } from './input-rules.js';
 import { insertNode, toggleBlockType, toggleMark } from './commands.js';
 import { placeholder, type PlaceholderOption } from './plugins/placeholder.js';
 import { blockIds } from './plugins/block-id.js';
 import { todoClicks } from './plugins/todo.js';
 import { uploads } from './plugins/upload.svelte.js';
 import { paste, type PasteOptions } from './plugins/paste.js';
+import { markdownClipboard } from './plugins/markdown-clipboard.js';
 import { animateBlockMoves, captureBlockRects, dragAutoScroll } from './plugins/drop.js';
 import { renderText } from '../render/index.js';
 import { inputRules, type InputRule } from 'prosemirror-inputrules';
@@ -108,6 +110,55 @@ export interface EditorOptions {
 		| ((schema: Schema) => Plugin[] | HistoryImplementation);
 	/** Paste behavior (markdown parsing, custom HTML transform) */
 	paste?: PasteOptions;
+	/**
+	 * The app's markdown dialect: what a markdown paste parses as, and what a
+	 * copy or cut writes to the clipboard's `text/plain`. See
+	 * {@link MarkdownHooks}.
+	 *
+	 * Without it the package's own small parser handles markdown pastes and
+	 * ProseMirror's plain-text extraction handles copies.
+	 */
+	markdown?: MarkdownHooks;
+	/**
+	 * The typing shortcuts, as a whole list.
+	 *
+	 * `false` installs none. A factory is handed the built-in rules
+	 * (`baseInputRules`) and returns the list to install, which is how an app
+	 * **replaces** a shortcut rather than only adding to it: `inputRules` stops
+	 * at the first rule that fires, so a rule returned ahead of a built-in
+	 * shadows it.
+	 *
+	 * ```ts
+	 * // `#` means level 1 in this app's dialect, not the base rule's level 2
+	 * input_rules: ({ schema, defaults }) => [...dialectRules(schema), ...defaults],
+	 * ```
+	 *
+	 * A block's own `input_rules` are separate and always additive — they are
+	 * installed as their own plugin, after this one.
+	 */
+	input_rules?: false | ((ctx: { schema: Schema; defaults: InputRule[] }) => InputRule[]);
+	/**
+	 * The app's own bindings, bound **ahead** of the package's.
+	 *
+	 * The counterpart of {@link EditorOptions.input_rules} for keystrokes, and
+	 * it exists for the same reason: `keymap` plugins are consulted in order and
+	 * the first binding that returns `true` wins, so a binding returned here
+	 * **replaces** the package's for that keystroke. Anything not named is left
+	 * exactly as it ships.
+	 *
+	 * ```ts
+	 * // `Mod-Alt-1` is a level-1 heading in this app's dialect, not the
+	 * // package's level 2
+	 * keymap: ({ schema }) => ({
+	 *   'Mod-Alt-1': toggleBlockType(schema.nodes.heading, { level: 1 }),
+	 * }),
+	 * ```
+	 *
+	 * A block's own `keymap` still binds tighter — a block that owns a key owns
+	 * it inside itself — and `Mod-z` stays with whatever the `history` option
+	 * installed.
+	 */
+	keymap?: (ctx: { schema: Schema; editor: Editor }) => Record<string, PMCommand>;
 	link?: {
 		/** Normalize/validate an href; return null to reject */
 		validate?: (href: string) => string | null;
@@ -544,9 +595,10 @@ export class Editor {
 	}
 
 	/**
-	 * Registers a trigger-character menu ('/' slash menu, '@' mentions, …).
-	 * The handler ref is late-bound so a Svelte component can own all menu
-	 * state. Returns an unregister fn.
+	 * Registers a trigger menu ('/' slash menu, '@' mentions, '[[' wikilinks,
+	 * …). The trigger is a string, so it may be more than one character. The
+	 * handler ref is late-bound so a Svelte component can own all menu state.
+	 * Returns an unregister fn.
 	 */
 	suggest(
 		char: string,
@@ -678,7 +730,15 @@ export class Editor {
 		for (const block of this.blocks.values()) {
 			if (block.keymap) plugins.push(keymap(block.keymap));
 		}
-		plugins.push(buildInputRules(this.schema));
+		const rules_option = this.#options.input_rules;
+		if (rules_option !== false) {
+			const defaults = baseInputRules(this.schema);
+			const rules =
+				typeof rules_option === 'function'
+					? rules_option({ schema: this.schema, defaults })
+					: defaults;
+			if (rules.length) plugins.push(inputRules({ rules }));
+		}
 		const blockRules: InputRule[] = [];
 		for (const block of this.blocks.values()) {
 			if (block.input_rules) blockRules.push(...block.input_rules(this.schema));
@@ -702,6 +762,9 @@ export class Editor {
 		plugins.push(
 			...buildKeymaps(this.schema, {
 				history: this.#historyEnabled && !history_impl,
+				// Ahead of every binding below it, which is what makes this an
+				// override seam rather than a second place to add keys.
+				extra: this.#options.keymap?.({ schema: this.schema, editor: this }),
 			}),
 		);
 		if (history_impl) {
@@ -730,7 +793,12 @@ export class Editor {
 			todoClicks(),
 		);
 		if (this.uploader) plugins.push(uploads(this));
-		plugins.push(paste(this, this.#options.paste));
+		const markdown_hooks = this.#options.markdown;
+		plugins.push(paste(this, this.#options.paste, markdown_hooks));
+		// After `paste`, which is where the parse half lives; this one only
+		// answers `clipboardTextSerializer`, so the order between them is not
+		// load-bearing — it reads as one seam.
+		if (markdown_hooks?.serialize) plugins.push(markdownClipboard(markdown_hooks));
 
 		for (const block of this.blocks.values()) {
 			if (block.plugins) plugins.push(...block.plugins({ schema: this.schema }));

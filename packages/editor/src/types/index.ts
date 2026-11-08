@@ -1,4 +1,4 @@
-import type { NodeSpec, Schema } from 'prosemirror-model';
+import type { NodeSpec, Schema, Slice } from 'prosemirror-model';
 import type { Command as PMCommand, EditorState, Plugin } from 'prosemirror-state';
 import type { InputRule } from 'prosemirror-inputrules';
 import type { Component } from 'svelte';
@@ -10,6 +10,67 @@ export interface JSONContent {
 	content?: JSONContent[];
 	marks?: { type: string; attrs?: Record<string, unknown> }[];
 	text?: string;
+}
+
+/**
+ * The editor's markdown seam: where markdown enters and leaves the editor.
+ *
+ * The package ships a deliberately small markdown parser for paste
+ * (`looksLikeMarkdown`/`parseMarkdown` in `core/markdown.ts`) and no
+ * serializer at all. An app with a **dialect** — its own constructs, its own
+ * spelling of them, its own round-trip guarantees — supplies both halves here
+ * and the editor stops guessing:
+ *
+ * ```ts
+ * new Editor({
+ *   markdown: {
+ *     parse: (text) => parseMarkdown(text).content,
+ *     serialize: (slice) => serializeMarkdown(docFromSlice(slice)),
+ *   },
+ * });
+ * ```
+ *
+ * The two hooks are independent — supply either, both, or neither.
+ *
+ * **What the editor does with them**, and it is only ever these two things:
+ *
+ * - **Paste.** A plain-text paste that {@link looks_like} claims goes through
+ *   {@link parse} instead of the built-in parser. The result is transformed by
+ *   `transformPasted` before it is inserted, exactly as a rich paste is, so
+ *   `block_id` rules apply to markdown pastes too.
+ * - **Copy and cut.** The clipboard's `text/plain` flavour is written by
+ *   {@link serialize}. `text/html` is untouched, so a paste back into the same
+ *   editor still takes the lossless path.
+ *
+ * Nothing else in the package calls them. Markdown is not the document format;
+ * it is a clipboard flavour and an import format, and an app that wants a
+ * markdown *projection* of its documents runs its own serializer over
+ * `editor.doc` on its own schedule.
+ */
+export interface MarkdownHooks {
+	/**
+	 * Does this plain text look like markdown? Defaults to the package's own
+	 * heuristic (`looksLikeMarkdown`). Return false to leave a paste alone.
+	 */
+	looks_like?: (text: string) => boolean;
+	/**
+	 * Markdown text → content to insert, as ProseMirror JSON. A single node, a
+	 * list of blocks, or `null` to decline (the paste then falls through to the
+	 * ordinary plain-text path).
+	 *
+	 * Anything the schema rejects is a decline too: the editor parses the JSON
+	 * against its own schema and falls back rather than throwing.
+	 */
+	parse?: (text: string, ctx: { schema: Schema }) => JSONContent | JSONContent[] | null;
+	/**
+	 * A copied slice → the clipboard's `text/plain`. `null` declines, leaving
+	 * ProseMirror's own plain-text extraction.
+	 *
+	 * The slice has already been through `transformCopied`, so ids and any
+	 * other clipboard stamping are visible here — strip whatever should not
+	 * leave the app.
+	 */
+	serialize?: (slice: Slice, ctx: { schema: Schema }) => string | null;
 }
 
 /** Where a registered command surfaces in the UI. */

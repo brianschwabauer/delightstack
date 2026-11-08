@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Button, Code, Select } from '@delightstack/components';
+	import { Button, Select } from '@delightstack/components';
+	import Code from '@delightstack/components/display/Code.svelte';
 	import type { BlockProps } from '../../types/index.js';
 
 	type CodeAttrs = { language: string; block_id: string | null };

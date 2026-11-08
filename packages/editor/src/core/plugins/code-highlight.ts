@@ -1,7 +1,9 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import type { Node as PMNode } from 'prosemirror-model';
-import { tokenizeLine, type CodeToken } from '@delightstack/components/display';
+// The file export, not the barrel: the barrel's value edge to the tokenizer
+// is exactly what DS-13 measures (see the comment in display/index.ts).
+import { tokenizeLine, type Token as CodeToken } from '@delightstack/components/display/code-tokens';
 
 /**
  * Live syntax highlighting for editable code blocks, as inline decorations

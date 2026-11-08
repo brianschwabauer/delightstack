@@ -2,6 +2,7 @@ import {
 	InputRule,
 	inputRules,
 	textblockTypeInputRule,
+	undoInputRule,
 	wrappingInputRule,
 } from 'prosemirror-inputrules';
 import type { MarkType, Schema } from 'prosemirror-model';
@@ -13,6 +14,20 @@ import type { Plugin } from 'prosemirror-state';
  * `` `code` `` / `~~strike~~` marks.
  */
 export function buildInputRules(schema: Schema): Plugin {
+	return inputRules({ rules: baseInputRules(schema) });
+}
+
+/**
+ * The same rules as a list, for an app that wants to extend, reorder or drop
+ * them — `Editor`'s `input_rules` option is handed exactly this.
+ *
+ * The order is the semantics: `inputRules` runs the list in order and stops at
+ * the first rule that fires, so a rule placed *before* one of these shadows it.
+ * That is how an app with its own markdown dialect replaces a shortcut whose
+ * meaning it disagrees with (`# ` producing a level-2 heading, say) without
+ * giving up the dozen it agrees with.
+ */
+export function baseInputRules(schema: Schema): InputRule[] {
 	const rules: InputRule[] = [];
 
 	if (schema.nodes.heading) {
@@ -84,7 +99,7 @@ export function buildInputRules(schema: Schema): Plugin {
 		rules.push(markInputRule(/(?<!`)`([^`]+)`$/, schema.marks.code));
 	}
 
-	return inputRules({ rules });
+	return rules;
 }
 
 /**
@@ -111,5 +126,20 @@ export function markInputRule(pattern: RegExp, mark: MarkType): InputRule {
 	});
 }
 
-/** Re-exported for custom block input rules. */
-export { InputRule, textblockTypeInputRule, wrappingInputRule };
+/**
+ * Re-exported for custom block input rules, and for an app assembling its own
+ * list through the `input_rules` option — so writing a dialect's rules needs no
+ * direct dependency on `prosemirror-inputrules`.
+ *
+ * `undoInputRule` is here for the same reason and one more: it is what the
+ * package's own `Backspace` binding is chained from, so an app testing that a
+ * rule it wrote is undoable by one press needs the *real* command rather than a
+ * stand-in that only resembles it.
+ */
+export {
+	InputRule,
+	inputRules,
+	textblockTypeInputRule,
+	undoInputRule,
+	wrappingInputRule,
+};
