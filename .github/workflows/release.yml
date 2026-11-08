@@ -36,7 +36,11 @@ jobs:
         run: |
           pnpm build
           pnpm typecheck
-          pnpm test
+          # Two packages at a time: every package's suite at once (two of them
+          # boot workerd) overloads the runner until Vitest's worker RPC
+          # times out ("Timeout calling onTaskUpdate").
+          pnpm exec turbo run test --concurrency=2
+          pnpm check:dist
 
       - name: Create Release Pull Request or Publish to npm
         id: changesets
