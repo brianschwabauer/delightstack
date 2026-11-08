@@ -5,9 +5,9 @@ import type {
 	ContainerOutputVariant,
 	ImageMetadata,
 	ErrorCode,
-} from './types';
+} from './types.js';
 import { DelightError } from '@delightstack/utilities';
-import { createError } from './errors';
+import { createError } from './errors.js';
 
 const BOUNDARY = '----imgproc';
 const RPC_TIMEOUT_MS = 120_000;
@@ -15,6 +15,13 @@ const RPC_TIMEOUT_MS = 120_000;
 interface ContainerProcessOptions {
 	variants?: VariantConfig[];
 	compress_original?: boolean;
+	/**
+	 * Whether the caller intends to keep the original. Gates (together with
+	 * `compress_original`) the pipeline's compressed-'original' output — the
+	 * one encode path that preserves metadata (EXIF/GPS). Defaults to true
+	 * inside the container when absent.
+	 */
+	keep_original?: boolean;
 	avatar?: boolean;
 	/**
 	 * R2 bucket for fetching watermark images. Only used for standalone
@@ -193,10 +200,16 @@ export class ImageProcessorContainer extends Container {
 		const watermarkImages =
 			options?.watermark_images ?? (await this.fetchWatermarkImages(options));
 
-		// Build options to send to container
+		// Build options to send to container. keep_original must cross this
+		// boundary too: the pipeline's compressed-'original' branch is gated on
+		// `compress_original && keep_original`, and it is the one encode path
+		// that preserves metadata (EXIF/GPS) — dropped here, the container
+		// defaults it to true and fabricates a metadata-carrying variant the
+		// caller asked to discard.
 		const containerOptions: Record<string, unknown> = {
 			variants: options?.variants,
 			compress_original: options?.compress_original,
+			keep_original: options?.keep_original,
 			avatar: options?.avatar,
 		};
 

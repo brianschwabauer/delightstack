@@ -1,5 +1,5 @@
 import { DelightError } from '@delightstack/utilities';
-import type { ErrorCode } from './types';
+import type { ErrorCode } from './types.js';
 
 /** Status code mapping for image error codes */
 function statusForCode(code: ErrorCode): number {

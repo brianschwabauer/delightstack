@@ -28,6 +28,42 @@ function convertGps(dms: number[] | undefined, ref: string | undefined): number 
 	return Math.round(decimal * 1_000_000) / 1_000_000;
 }
 
+/**
+ * EXIF `OffsetTime*` value ("+02:00", "-07:00", or "Z") to minutes east of
+ * UTC, or null when unreadable. EXIF 2.31 §4.6.5 spells the format
+ * `±HH:MM`; anything else is treated as absent rather than guessed at.
+ */
+function offsetMinutes(value: unknown): number | null {
+	if (typeof value !== 'string') return null;
+	const trimmed = value.trim();
+	if (trimmed === 'Z') return 0;
+	const match = trimmed.match(/^([+-])(\d{2}):(\d{2})$/);
+	if (!match) return null;
+	const minutes_part = Number(match[3]);
+	if (minutes_part > 59) return null; // "+02:99" is not a time
+	const minutes = Number(match[2]) * 60 + minutes_part;
+	if (minutes > 14 * 60) return null; // beyond any real UTC offset
+	return match[1] === '-' ? -minutes : minutes;
+}
+
+/**
+ * Normalize an EXIF capture time to canonical UTC ISO 8601, or null.
+ *
+ * exif-reader parses `DateTimeOriginal` ("2019:06:12 14:03:00" — a zoneless
+ * wall clock) into a Date *stamped as UTC*. When `OffsetTimeOriginal` names
+ * the wall clock's real zone, the true UTC instant is that stamp minus the
+ * offset; without one, the wall clock stamped as UTC is the best available
+ * reading. Never a passthrough of the EXIF spelling: consumers compare this
+ * string lexicographically against UTC ISO boundaries, so an unnormalized
+ * value silently misorders and misfilters.
+ */
+function normalizeDateTaken(date: unknown, offset_time: unknown): string | null {
+	if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+	const offset = offsetMinutes(offset_time);
+	const utc = offset === null ? date : new Date(date.getTime() - offset * 60_000);
+	return utc.toISOString();
+}
+
 /** Derive file extension from filename */
 function getFileExtension(file_name: string | null): string | null {
 	if (!file_name) return null;
@@ -96,10 +132,10 @@ export async function extractMetadata(
 	if (meta.exif) {
 		try {
 			const parsed = exifReader(meta.exif);
-			if (parsed.Photo?.DateTimeOriginal) {
-				const d = parsed.Photo.DateTimeOriginal;
-				date_taken = d instanceof Date ? d.toISOString() : String(d);
-			}
+			date_taken = normalizeDateTaken(
+				parsed.Photo?.DateTimeOriginal,
+				parsed.Photo?.OffsetTimeOriginal,
+			);
 			if (parsed.GPSInfo) {
 				gps_latitude = convertGps(
 					parsed.GPSInfo.GPSLatitude as number[] | undefined,

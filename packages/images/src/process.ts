@@ -3,9 +3,9 @@ import type {
 	ProcessImageResult,
 	OutputVariant,
 	VariantConfig,
-} from './types';
-import type { ImageProcessorContainer } from './container';
-import { createError } from './errors';
+} from './types.js';
+import type { ImageProcessorContainer } from './container.js';
+import { createError } from './errors.js';
 import { generateTimestampID } from '@delightstack/utilities';
 
 /**
@@ -65,6 +65,10 @@ export async function processImage(
 	const result = await stub.process(await object.arrayBuffer(), {
 		variants: options.variants,
 		compress_original: options.compress_original ?? true,
+		// Mirrors Mode 1: without this the container defaults keep_original to
+		// true and emits a metadata-carrying (EXIF/GPS) compressed 'original'
+		// the caller asked to discard.
+		keep_original: options.keep_original,
 		avatar: options.avatar,
 		watermark_images,
 	} as unknown as Parameters<ImageProcessorContainer['process']>[1]);

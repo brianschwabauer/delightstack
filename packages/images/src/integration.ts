@@ -5,9 +5,9 @@ import type {
 	OutputVariant,
 	ImageRecord,
 	ImageMetadata,
-} from './types';
-import { RESERVED_IMAGE_FIELDS } from './types';
-import type { ImageProcessorContainer } from './container';
+} from './types.js';
+import { RESERVED_IMAGE_FIELDS } from './types.js';
+import type { ImageProcessorContainer } from './container.js';
 import type { DatabaseServer } from '@delightstack/database';
 
 /** Map ImageMetadata to database record fields */
@@ -303,6 +303,14 @@ export function imageProcessing(
 					const result = await stub.process(await object.arrayBuffer(), {
 						variants: variants_config,
 						compress_original: proc.compress_original ?? defaultCompressOriginal,
+						// Without this the container falls back to its own default
+						// (true) and fabricates a compressed 'original' variant —
+						// the one encode path that preserves metadata (EXIF/GPS,
+						// via keepMetadata) — which the keep_original:false
+						// cleanup below then *keeps*, because an output variant
+						// claimed the 'original' name (the SVG guard). The
+						// caller's choice must reach the pipeline that acts on it.
+						keep_original: proc.keep_original ?? defaultKeepOriginal,
 						avatar: proc.avatar,
 						watermark_images,
 					} as unknown as Parameters<ImageProcessorContainer['process']>[1]);
@@ -339,8 +347,15 @@ export function imageProcessing(
 						}),
 					);
 
-					// If keep_original is false, delete the raw upload
-					if (proc.keep_original === false) {
+					// If keep_original is false, delete the raw upload — unless the
+					// pipeline just wrote an output variant under that same name:
+					// an SVG's sanitized output IS its 'original' variant (the SVG
+					// pipeline emits no resized variants), so deleting the key here
+					// would delete the object the record's variant list points at.
+					if (
+						proc.keep_original === false &&
+						!outputVariants.some((variant) => variant.name === 'original')
+					) {
 						await bucket.delete(r2Key(image.base_path, image.id, 'original'));
 					}
 

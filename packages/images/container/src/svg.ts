@@ -2,66 +2,7 @@ import sharp from 'sharp';
 import { generateThumbHash } from './thumbhash';
 import { extractColors } from './colors';
 import type { ProcessOptions, PipelineResult } from './pipeline';
-
-/** Dangerous SVG elements to remove (includes animation elements that can trigger JS) */
-const DANGEROUS_ELEMENTS =
-	/(<script[\s>][\s\S]*?<\/script>|<foreignObject[\s>][\s\S]*?<\/foreignObject>|<iframe[\s>][\s\S]*?<\/iframe>|<embed[\s>][\s\S]*?<\/embed>|<object[\s>][\s\S]*?<\/object>|<set[\s>][\s\S]*?(?:<\/set>|\/>)|<animate[\s>][\s\S]*?(?:<\/animate>|\/>)|<animateTransform[\s>][\s\S]*?(?:<\/animateTransform>|\/>))/gi;
-
-/** Event handler attributes (supports double-quoted, single-quoted, and unquoted values) */
-const EVENT_HANDLERS = /\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|\S+)/gi;
-
-/** javascript: and data:text/html URLs — no `g` flag to avoid .test() statefulness */
-const DANGEROUS_URLS = /(?:javascript|data\s*:\s*text\/html)\s*:/i;
-
-/** External href/xlink:href (both quote styles; keep internal #id references) */
-const EXTERNAL_HREFS =
-	/\s+((?:xlink:)?href)\s*=\s*(?:"(https?:\/\/[^"]*)"|'(https?:\/\/[^']*)')/gi;
-
-/** <use> elements with external href (can reference malicious SVGs) */
-const EXTERNAL_USE =
-	/<use[\s][^>]*(?:xlink:)?href\s*=\s*(?:"(?!#)[^"]*"|'(?!#)[^']*')[^>]*\/?>/gi;
-
-/** Decode HTML/XML numeric and named entities to detect obfuscated URLs */
-function decodeEntities(str: string): string {
-	return str
-		.replace(/&#x([0-9a-fA-F]+);?/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-		.replace(/&#(\d+);?/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
-		.replace(/&lt;/g, '<')
-		.replace(/&gt;/g, '>')
-		.replace(/&amp;/g, '&')
-		.replace(/&quot;/g, '"')
-		.replace(/&apos;/g, "'");
-}
-
-/**
- * Sanitize SVG content by removing dangerous elements and attributes.
- * Throws SVG_MALICIOUS if javascript: or data:text/html content is found.
- */
-function sanitizeSvg(svgString: string): string {
-	// Check for dangerous URLs in both raw and entity-decoded forms
-	if (DANGEROUS_URLS.test(svgString) || DANGEROUS_URLS.test(decodeEntities(svgString))) {
-		throw Object.assign(new Error('SVG contains dangerous JavaScript or data URLs'), {
-			code: 'SVG_MALICIOUS',
-			details: 'Contains javascript: or data:text/html URLs',
-		});
-	}
-
-	let sanitized = svgString;
-
-	// Remove dangerous elements (script, foreignObject, iframe, embed, object, animation)
-	sanitized = sanitized.replace(DANGEROUS_ELEMENTS, '');
-
-	// Remove <use> elements with external references
-	sanitized = sanitized.replace(EXTERNAL_USE, '');
-
-	// Remove event handler attributes
-	sanitized = sanitized.replace(EVENT_HANDLERS, '');
-
-	// Remove external hrefs (keep internal #id references)
-	sanitized = sanitized.replace(EXTERNAL_HREFS, '');
-
-	return sanitized;
-}
+import { sanitizeSvg } from './svg-sanitize';
 
 /** Extract dimensions from SVG viewBox or width/height attributes */
 function extractSvgDimensions(svgString: string): { width: number; height: number } {
