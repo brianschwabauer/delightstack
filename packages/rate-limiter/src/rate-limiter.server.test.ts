@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { RateLimiterServer } from './rate-limiter.server';
+import { RateLimiterServer } from './rate-limiter.server.js';
 
 vi.mock('cloudflare:workers', () => {
 	class DurableObject {

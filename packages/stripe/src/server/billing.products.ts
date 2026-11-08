@@ -1,6 +1,6 @@
 import type Stripe from 'stripe';
-import type { ResolvedBillingConfig } from './billing.config';
-import { getStripe, stripeCall } from './billing.stripe';
+import type { ResolvedBillingConfig } from './billing.config.js';
+import { getStripe, stripeCall } from './billing.stripe.js';
 
 /** Track whether sync has been performed this lifecycle */
 let products_synced = false;

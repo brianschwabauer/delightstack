@@ -50,13 +50,13 @@ class FakeBroadcastChannel {
 
 // The worker module is imported dynamically AFTER globals are stubbed because
 // it has module-level side effects (singleton + SharedWorker port wiring).
-let WebsocketWorker: typeof import('./websocket.worker').WebsocketWorker;
+let WebsocketWorker: typeof import('./websocket.worker.js').WebsocketWorker;
 
 beforeAll(async () => {
 	vi.stubGlobal('WebSocket', FakeWebSocket);
 	vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
 	vi.stubGlobal('self', { addEventListener: vi.fn() });
-	({ WebsocketWorker } = await import('./websocket.worker'));
+	({ WebsocketWorker } = await import('./websocket.worker.js'));
 });
 
 // ---------------------------------------------------------------------------

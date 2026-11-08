@@ -13,7 +13,7 @@
  * whole thing run in O(n log n) instead of O(n·m).
  */
 
-import { DiffError } from './diff.error';
+import { DiffError } from './diff.error.js';
 
 /**
  * Separator between a repeated key and its occurrence number under `duplicate_keys: 'index'`.

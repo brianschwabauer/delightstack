@@ -1,4 +1,4 @@
-import { DelightError } from './error.helper';
+import { DelightError } from './error.helper.js';
 
 interface GenerateIdOptions {
 	/** The length of the ID @default 20 */

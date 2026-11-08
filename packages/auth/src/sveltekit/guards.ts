@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import type { ServerLoadEvent } from '@sveltejs/kit';
-import type { AuthLocals } from '../server/auth.handler';
-import { decodePermissions } from '../types';
+import type { AuthLocals } from '../server/auth.handler.js';
+import { decodePermissions } from '../types/index.js';
 
 interface GuardOptions {
 	/** URL to redirect unauthenticated users to @default '/signin' */

@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import { Meta } from './meta.type';
+import { Meta } from './meta.type.js';
 
 /** A bitwise encoded permission that the user has */
 export const EncodedPermission = z.number().int().nonnegative();

@@ -18,7 +18,7 @@
 </script>
 
 <script lang="ts">
-	import { fieldPresence } from '../client/field-presence.attachment.svelte';
+	import { fieldPresence } from '../client/field-presence.attachment.svelte.js';
 
 	let {
 		anchor,

@@ -6,7 +6,7 @@ import type {
 	PresenceRemoveMessage,
 	PresenceRequestMessage,
 	PresenceSnapshotMessage,
-} from '../types';
+} from '../types/index.js';
 
 /**
  * Event prefixes that should use the websocket server's generous "ephemeral"

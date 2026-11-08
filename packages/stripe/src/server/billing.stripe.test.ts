@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type Stripe from 'stripe';
 import { DelightError } from '@delightstack/utilities';
-import { formatInvoice, resolveReturnUrl } from './billing.stripe';
-import { defineBillingConfig } from './billing.config';
+import { formatInvoice, resolveReturnUrl } from './billing.stripe.js';
+import { defineBillingConfig } from './billing.config.js';
 
 function makeConfig(overrides?: Partial<Parameters<typeof defineBillingConfig>[0]>) {
 	return defineBillingConfig({

@@ -6,6 +6,6 @@
 // the `./adapters` entry, and the server module in `./server`, so importing the
 // root never pulls in a transport/auth implementation you may have swapped out.
 
-export * from './types';
-export * from './core';
-export * from './client';
+export * from './types/index.js';
+export * from './core/index.js';
+export * from './client/index.js';

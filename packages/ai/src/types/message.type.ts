@@ -1,4 +1,4 @@
-import type { TokenUsage, AiErrorCode, ToolCall } from './ai.type';
+import type { TokenUsage, AiErrorCode, ToolCall } from './ai.type.js';
 
 // ── WebSocket message types for AI streaming ────────────────────────────────
 

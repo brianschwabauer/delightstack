@@ -7,8 +7,8 @@ import type {
 	EmbeddingResult,
 	TokenUsage,
 	ConversationMessage,
-} from '../types';
-import { createAiError } from './ai.errors';
+} from '../types/index.js';
+import { createAiError } from './ai.errors.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 

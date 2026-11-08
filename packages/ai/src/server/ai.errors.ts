@@ -1,5 +1,5 @@
 import { DelightError } from '@delightstack/utilities';
-import type { AiErrorCode } from '../types';
+import type { AiErrorCode } from '../types/index.js';
 
 /** Status code mapping for AI error codes */
 function statusForCode(code: AiErrorCode): number {

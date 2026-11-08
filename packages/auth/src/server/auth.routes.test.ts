@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { matchRoute, safeRedirect } from './auth.routes';
+import { matchRoute, safeRedirect } from './auth.routes.js';
 
 type RouteCtx = Parameters<NonNullable<ReturnType<typeof matchRoute>>['handler']>[0];
 

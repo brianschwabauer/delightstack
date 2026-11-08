@@ -1,12 +1,12 @@
 import type { DatabaseServer } from '@delightstack/database';
-import type { AiBroadcastChannel } from './ai.server';
+import type { AiBroadcastChannel } from './ai.server.js';
 import type {
 	AiProcessingOptions,
 	EmbeddingFieldConfig,
 	EmbeddingStatus,
-} from '../types';
-import type { AiEmbeddingUpdatedMessage } from '../types/message.type';
-import { createAiGateway, type AiGatewayClient } from './ai.gateway';
+} from '../types/index.js';
+import type { AiEmbeddingUpdatedMessage } from '../types/message.type.js';
+import { createAiGateway, type AiGatewayClient } from './ai.gateway.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDatabaseServer = DatabaseServer<any>;

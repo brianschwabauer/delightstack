@@ -7,8 +7,8 @@ import {
 	moreActive,
 	dedupeUsers,
 	type PeerUpdate,
-} from './awareness';
-import type { PeerPresence, PresenceState, PresenceUser } from '../types';
+} from './awareness.js';
+import type { PeerPresence, PresenceState, PresenceUser } from '../types/index.js';
 
 const user = (id: string, extra?: Partial<PresenceUser>): PresenceUser => ({
 	id,

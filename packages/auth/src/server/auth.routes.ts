@@ -1,10 +1,10 @@
 import { z } from 'zod/v4';
 import { DelightError, parseSchema, generateID } from '@delightstack/utilities';
-import type { ResolvedAuthConfig } from './auth.config';
-import type { AuthLocals, AuthServer } from './auth.handler';
+import type { ResolvedAuthConfig } from './auth.config.js';
+import type { AuthLocals, AuthServer } from './auth.handler.js';
 import type { RequestEvent } from '@sveltejs/kit';
-import type { UserSessionMeta } from '../types';
-import { resolveErrorCode } from '../types/error.type';
+import type { UserSessionMeta } from '../types/index.js';
+import { resolveErrorCode } from '../types/error.type.js';
 import {
 	decodePermissions,
 	EmailPasswordSignIn,
@@ -14,12 +14,12 @@ import {
 	PasskeyRegistrationResponse,
 	PasskeyAuthenticationResponse,
 	type PasskeyRelyingParty,
-} from '../types';
-import { getOauthToken } from './oauth.helper';
-import type { AuthOperationResult } from './auth.db.server';
-import type { OauthToken } from '../types';
-import { getOrgStateCookie, setOrgStateCookie } from '../sveltekit/cookies';
-import { getSecretKey } from './jwt.server';
+} from '../types/index.js';
+import { getOauthToken } from './oauth.helper.js';
+import type { AuthOperationResult } from './auth.db.server.js';
+import type { OauthToken } from '../types/index.js';
+import { getOrgStateCookie, setOrgStateCookie } from '../sveltekit/cookies.js';
+import { getSecretKey } from './jwt.server.js';
 
 /** Sign an OAuth state payload with HMAC-SHA256 to prevent CSRF/tampering */
 async function signOauthState(

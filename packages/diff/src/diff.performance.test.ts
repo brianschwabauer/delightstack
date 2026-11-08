@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { diffStructured } from './diff.structured';
-import { diffLines, diffWords, type DiffOp } from './diff.text';
+import { diffStructured } from './diff.structured.js';
+import { diffLines, diffWords, type DiffOp } from './diff.text.js';
 
 /** Deterministic PRNG (mulberry32) — no Math.random anywhere in this suite. */
 function makeRandom(seed: number): () => number {
@@ -159,7 +159,10 @@ const SCALING_BOUND = 3.4;
  * the true cost and the most stable thing to take a ratio of. One untimed
  * warm-up of each first, so JIT compilation is not billed to the measurement.
  */
-function expectSubQuadratic(prepare: (size: number) => () => void, base_size: number): void {
+function expectSubQuadratic(
+	prepare: (size: number) => () => void,
+	base_size: number,
+): void {
 	const run_small = prepare(base_size);
 	const run_large = prepare(base_size * 2);
 	run_small(); // warm-up: JIT, and first-touch of the freshly built inputs

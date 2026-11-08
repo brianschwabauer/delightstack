@@ -1,5 +1,5 @@
-export { PresenceClient, type PresenceClientOptions } from './presence.client.svelte';
-export { userColor } from './color';
+export { PresenceClient, type PresenceClientOptions } from './presence.client.svelte.js';
+export { userColor } from './color.js';
 export {
 	mergeUpdate,
 	applySnapshot,
@@ -8,7 +8,7 @@ export {
 	moreActive,
 	dedupeUsers,
 	type PeerUpdate,
-} from './awareness';
+} from './awareness.js';
 export {
 	STAGE_ATTR,
 	normalize,
@@ -19,4 +19,4 @@ export {
 	normalizeCursor,
 	denormalizeCursor,
 	type StageGeometry,
-} from './coordinates';
+} from './coordinates.js';

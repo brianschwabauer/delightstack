@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveErrorCode, AUTH_ERROR_MAP } from './error.type';
+import { resolveErrorCode, AUTH_ERROR_MAP } from './error.type.js';
 
 describe('resolveErrorCode', () => {
 	it('resolves known detail strings', () => {

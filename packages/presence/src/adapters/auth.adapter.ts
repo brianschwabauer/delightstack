@@ -1,5 +1,5 @@
 import type { AuthClient } from '@delightstack/auth/client';
-import type { PresenceIdentity, IdentityUser } from '../types';
+import type { PresenceIdentity, IdentityUser } from '../types/index.js';
 
 /**
  * Wrap a `@delightstack/auth` client as a {@link PresenceIdentity}.

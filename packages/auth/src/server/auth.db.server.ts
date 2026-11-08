@@ -1,8 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
-import { SqlServer, type SqlEntityQuery } from './sql.server';
-import { AUTH_DATABASE_UPGRADES, AuthDatabaseSchema } from './auth.sql.schema';
+import { SqlServer, type SqlEntityQuery } from './sql.server.js';
+import { AUTH_DATABASE_UPGRADES, AuthDatabaseSchema } from './auth.sql.schema.js';
 import { DelightError, generateID, parseSchema } from '@delightstack/utilities';
-import { generateJwt, decodeJwt } from './jwt.server';
+import { generateJwt, decodeJwt } from './jwt.server.js';
 import {
 	decodeOauthScopes,
 	decodePermissions,
@@ -24,7 +24,7 @@ import {
 	PasskeyRelyingParty,
 	PasskeyRegistrationResponse,
 	PasskeyAuthenticationResponse,
-} from './../types';
+} from './../types/index.js';
 import {
 	generateRegistrationOptions,
 	verifyRegistrationResponse,

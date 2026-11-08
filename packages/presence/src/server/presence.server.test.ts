@@ -4,13 +4,13 @@ import type {
 	WebsocketSessionMeta,
 } from '@delightstack/websocket/types';
 import type { WebsocketServer } from '@delightstack/websocket/server';
-import { createPresenceServer } from './presence.server';
+import { createPresenceServer } from './presence.server.js';
 import type {
 	PresenceUser,
 	PresenceUpdateMessage,
 	PresenceReactionMessage,
 	PresenceSnapshotMessage,
-} from '../types';
+} from '../types/index.js';
 
 const user = (id: string): PresenceUser => ({ id, name: id, color: '#abc' });
 

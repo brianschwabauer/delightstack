@@ -1,5 +1,5 @@
-import type { ResolvedBillingConfig } from './billing.config';
-import { getStripe, stripeCall } from './billing.stripe';
+import type { ResolvedBillingConfig } from './billing.config.js';
+import { getStripe, stripeCall } from './billing.stripe.js';
 import { DelightError } from '@delightstack/utilities';
 
 /**

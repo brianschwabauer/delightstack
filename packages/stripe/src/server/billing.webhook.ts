@@ -4,11 +4,11 @@ import type {
 	ResolvedBillingConfig,
 	AuthServerRpc,
 	WebsocketRpc,
-} from './billing.config';
+} from './billing.config.js';
 import { DelightError } from '@delightstack/utilities';
-import { getStripe } from './billing.stripe';
-import { syncSubscription } from './billing.sync';
-import { ensureWebhookRegistered } from './billing.webhook.register';
+import { getStripe } from './billing.stripe.js';
+import { syncSubscription } from './billing.sync.js';
+import { ensureWebhookRegistered } from './billing.webhook.register.js';
 
 export interface WebhookContext {
 	getAuthServer?: (event: RequestEvent) => AuthServerRpc | undefined;

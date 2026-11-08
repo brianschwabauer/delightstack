@@ -1,11 +1,11 @@
 import type { Handle, RequestEvent } from '@sveltejs/kit';
-import type { AuthConfig, ResolvedAuthConfig } from './auth.config';
-import type { AuthDatabaseServer } from './auth.db.server';
-import type { AuthClientData } from '../client/auth.client.svelte';
-import type { SessionToken, UserSessionMeta } from '../types';
+import type { AuthConfig, ResolvedAuthConfig } from './auth.config.js';
+import type { AuthDatabaseServer } from './auth.db.server.js';
+import type { AuthClientData } from '../client/auth.client.svelte.js';
+import type { SessionToken, UserSessionMeta } from '../types/index.js';
 import { DelightError } from '@delightstack/utilities';
-import { decodeJwt, extractJwtRefreshToken } from './jwt.server';
-import { matchRoute } from './auth.routes';
+import { decodeJwt, extractJwtRefreshToken } from './jwt.server.js';
+import { matchRoute } from './auth.routes.js';
 import {
 	getSessionCookie,
 	setSessionCookie,
@@ -19,8 +19,8 @@ import {
 	setOrgStateCookie,
 	serializeOrgStateCookie,
 	deleteOrgStateCookie,
-} from '../sveltekit/cookies';
-import { defineAuthConfig } from './auth.config';
+} from '../sveltekit/cookies.js';
+import { defineAuthConfig } from './auth.config.js';
 
 /** Generic auth server type — the subset of AuthDatabaseServer used by the handler */
 export type AuthServer = DurableObjectStub<

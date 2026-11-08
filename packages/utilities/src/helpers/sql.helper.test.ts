@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { prepareSql } from './sql.helper';
+import { prepareSql } from './sql.helper.js';
 
 describe('prepareSql', () => {
 	it('should handle a plain string with no interpolations', () => {

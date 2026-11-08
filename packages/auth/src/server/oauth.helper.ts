@@ -1,4 +1,4 @@
-import { CreateOauthToken, OauthConfig, OauthToken } from '../types';
+import { CreateOauthToken, OauthConfig, OauthToken } from '../types/index.js';
 import { DelightError } from '@delightstack/utilities';
 
 /**

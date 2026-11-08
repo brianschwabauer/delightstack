@@ -1,5 +1,5 @@
 import type { Remote } from 'comlink';
-import type { WebsocketWorker } from './websocket.worker';
+import type { WebsocketWorker } from './websocket.worker.js';
 
 let cached: Promise<Remote<WebsocketWorker>> | undefined;
 let raw_worker: Worker | SharedWorker | undefined;

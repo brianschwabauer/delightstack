@@ -1,4 +1,4 @@
-import { DelightError } from './error.helper';
+import { DelightError } from './error.helper.js';
 
 /**
  * The base62 digits used by sort keys, in ascending ASCII order so that ordinary

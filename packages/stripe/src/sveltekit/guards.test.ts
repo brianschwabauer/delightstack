@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ServerLoadEvent } from '@sveltejs/kit';
-import { createBillingGuards } from './guards';
+import { createBillingGuards } from './guards.js';
 
 function makeEvent(locals: Record<string, unknown>): ServerLoadEvent {
 	return {

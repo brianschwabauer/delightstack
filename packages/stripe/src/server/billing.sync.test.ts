@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type Stripe from 'stripe';
-import { defineBillingConfig } from './billing.config';
-import { syncSubscription, fetchSubscriptionState, activePlanIds } from './billing.sync';
+import { defineBillingConfig } from './billing.config.js';
+import {
+	syncSubscription,
+	fetchSubscriptionState,
+	activePlanIds,
+} from './billing.sync.js';
 
 const { stripe_mock } = vi.hoisted(() => ({
 	stripe_mock: {
@@ -10,7 +14,7 @@ const { stripe_mock } = vi.hoisted(() => ({
 }));
 
 vi.mock('./billing.stripe', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('./billing.stripe')>();
+	const actual = await importOriginal<typeof import('./billing.stripe.js')>();
 	return {
 		...actual,
 		getStripe: () => stripe_mock as unknown as Stripe,

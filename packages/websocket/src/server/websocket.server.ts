@@ -7,7 +7,7 @@ import type {
 	EntityChangedMessage,
 	SessionListMessage,
 	AuthSessionMeta,
-} from '../types';
+} from '../types/index.js';
 
 // ---------------------------------------------------------------------------
 // Config

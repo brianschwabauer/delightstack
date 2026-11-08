@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { RequestEvent } from '@sveltejs/kit';
-import { createWebsocketHandle, type WebsocketHandleOptions } from './websocket.handler';
+import {
+	createWebsocketHandle,
+	type WebsocketHandleOptions,
+} from './websocket.handler.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

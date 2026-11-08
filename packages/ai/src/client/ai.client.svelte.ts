@@ -1,6 +1,14 @@
 import type { WebsocketClient } from '@delightstack/websocket/client';
-import type { CompletionOptions, CompletionResult, TokenUsage, ToolCall } from '../types';
-import type { AiStreamChunkMessage, AiStreamErrorMessage } from '../types/message.type';
+import type {
+	CompletionOptions,
+	CompletionResult,
+	TokenUsage,
+	ToolCall,
+} from '../types/index.js';
+import type {
+	AiStreamChunkMessage,
+	AiStreamErrorMessage,
+} from '../types/message.type.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createAuthGuards } from './guards';
-import type { AuthLocals } from '../server/auth.handler';
-import type { SessionToken } from '../types';
+import { createAuthGuards } from './guards.js';
+import type { AuthLocals } from '../server/auth.handler.js';
+import type { SessionToken } from '../types/index.js';
 
 // Mock SvelteKit's redirect by throwing an error with status/location
 vi.mock('@sveltejs/kit', () => ({

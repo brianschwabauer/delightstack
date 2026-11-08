@@ -5,7 +5,7 @@ import type {
 	PresenceSession,
 	PresenceMessage,
 	PresenceEventMap,
-} from '../types';
+} from '../types/index.js';
 
 /** A `WebsocketClient` typed for presence's custom event map. */
 export type PresenceWebsocketClient = WebsocketClient<AuthSessionMeta, PresenceEventMap>;

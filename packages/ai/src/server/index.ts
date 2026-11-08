@@ -4,12 +4,12 @@ export {
 	type AiServerOptions,
 	type AiServer,
 	type AiMessageHandlerResult,
-} from './ai.server';
+} from './ai.server.js';
 export {
 	createAiGateway,
 	type AiGatewayOptions,
 	type AiGatewayClient,
-} from './ai.gateway';
-export { aiEmbeddings } from './ai.embeddings';
-export { createAiHandle, type AiHandleOptions } from './ai.handler';
-export { createAiError } from './ai.errors';
+} from './ai.gateway.js';
+export { aiEmbeddings } from './ai.embeddings.js';
+export { createAiHandle, type AiHandleOptions } from './ai.handler.js';
+export { createAiError } from './ai.errors.js';

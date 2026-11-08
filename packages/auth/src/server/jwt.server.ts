@@ -1,4 +1,4 @@
-import { SessionToken } from '../types';
+import { SessionToken } from '../types/index.js';
 import { DelightError, generateID } from '@delightstack/utilities';
 
 /** Tolerance for clock drift between token issuer and verifier when checking exp/iat/nbf */

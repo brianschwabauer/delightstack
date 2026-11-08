@@ -1,5 +1,5 @@
 import { getContext, setContext } from 'svelte';
-import type { PresenceClient } from '../core';
+import type { PresenceClient } from '../core/index.js';
 
 const KEY = Symbol('delightstack.presence');
 

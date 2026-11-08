@@ -4,7 +4,7 @@ import {
 	decodePermissions,
 	EmailCodeSignIn,
 	UpdateUser,
-} from './auth.type';
+} from './auth.type.js';
 
 const permissions = ['read', 'write', 'admin', 'owner'] as const;
 

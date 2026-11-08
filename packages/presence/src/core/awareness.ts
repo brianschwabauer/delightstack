@@ -4,7 +4,7 @@ import type {
 	PresenceUser,
 	PresenceState,
 	PresenceStatus,
-} from '../types';
+} from '../types/index.js';
 
 // ---------------------------------------------------------------------------
 // Pure awareness helpers — operate on a plain `Map<presence_id, PeerPresence>`.

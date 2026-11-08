@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DiffError } from './diff.error';
-import { escapeHTML, renderDiffHTML } from './diff.render';
-import { diffWords } from './diff.text';
+import { DiffError } from './diff.error.js';
+import { escapeHTML, renderDiffHTML } from './diff.render.js';
+import { diffWords } from './diff.text.js';
 
 describe('renderDiffHTML', () => {
 	it('wraps insertions and deletions', () => {

@@ -17,8 +17,8 @@
 
 <script lang="ts">
 	import { tooltip } from '@delightstack/utilities';
-	import { getPresence } from '../client/context';
-	import type { OnlineUser } from '../types';
+	import { getPresence } from '../client/context.js';
+	import type { OnlineUser } from '../types/index.js';
 
 	let {
 		size = 32,

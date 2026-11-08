@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RequestEvent } from '@sveltejs/kit';
 import type Stripe from 'stripe';
 import { DelightError } from '@delightstack/utilities';
-import { defineBillingConfig } from './billing.config';
-import { handleBillingRoute } from './billing.routes';
+import { defineBillingConfig } from './billing.config.js';
+import { handleBillingRoute } from './billing.routes.js';
 
 const { stripe_mock } = vi.hoisted(() => ({
 	stripe_mock: {
@@ -28,7 +28,7 @@ const { stripe_mock } = vi.hoisted(() => ({
 }));
 
 vi.mock('./billing.stripe', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('./billing.stripe')>();
+	const actual = await importOriginal<typeof import('./billing.stripe.js')>();
 	return {
 		...actual,
 		getStripe: () => stripe_mock as unknown as Stripe,

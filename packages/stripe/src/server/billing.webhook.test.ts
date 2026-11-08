@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RequestEvent } from '@sveltejs/kit';
 import type Stripe from 'stripe';
 import { DelightError } from '@delightstack/utilities';
-import { defineBillingConfig, type WebhookEventStore } from './billing.config';
-import { handleWebhook, resetWebhookSecretCache } from './billing.webhook';
+import { defineBillingConfig, type WebhookEventStore } from './billing.config.js';
+import { handleWebhook, resetWebhookSecretCache } from './billing.webhook.js';
 
 const { stripe_mock } = vi.hoisted(() => ({
 	stripe_mock: {
@@ -15,7 +15,7 @@ const { stripe_mock } = vi.hoisted(() => ({
 }));
 
 vi.mock('./billing.stripe', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('./billing.stripe')>();
+	const actual = await importOriginal<typeof import('./billing.stripe.js')>();
 	return {
 		...actual,
 		getStripe: () => stripe_mock as unknown as Stripe,

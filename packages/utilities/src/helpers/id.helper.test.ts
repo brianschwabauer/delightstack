@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DelightError } from './error.helper';
-import { generateTimestampID } from './id.helper';
+import { DelightError } from './error.helper.js';
+import { generateTimestampID } from './id.helper.js';
 
 const ALPHANUMERIC = /^[0-9A-Za-z]+$/;
 const PUSH_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';

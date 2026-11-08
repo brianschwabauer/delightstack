@@ -1,5 +1,5 @@
-import type { UserSessionMeta } from '../types';
-import type { AuthOperationResult, AuthDatabaseServer } from './auth.db.server';
+import type { UserSessionMeta } from '../types/index.js';
+import type { AuthOperationResult, AuthDatabaseServer } from './auth.db.server.js';
 
 /** The auth DO stub type — matches DurableObjectStub<AuthDatabaseServer> minus lifecycle methods. */
 type AuthStub = DurableObjectStub<
@@ -228,7 +228,7 @@ export interface AuthConfig<
 	 */
 	resolveOrgId?: (
 		event: import('@sveltejs/kit').RequestEvent,
-		session: import('../types').SessionToken<'auth'> | null,
+		session: import('../types/index.js').SessionToken<'auth'> | null,
 	) => string | null;
 
 	/** Base path for auth API routes @default '/api/auth' */

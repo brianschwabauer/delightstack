@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { WebsocketServer, type WebsocketServerConfig } from './websocket.server';
-import type { WebsocketSessionMeta } from '../types';
+import { WebsocketServer, type WebsocketServerConfig } from './websocket.server.js';
+import type { WebsocketSessionMeta } from '../types/index.js';
 
 vi.mock('cloudflare:workers', () => {
 	class DurableObject {

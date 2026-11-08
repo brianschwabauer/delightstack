@@ -4,12 +4,12 @@ import type {
 	ResolvedBillingConfig,
 	AuthServerRpc,
 	WebsocketRpc,
-} from './billing.config';
+} from './billing.config.js';
 import { DelightError } from '@delightstack/utilities';
-import { defineBillingConfig } from './billing.config';
-import { handleBillingRoute } from './billing.routes';
-import { handleWebhook } from './billing.webhook';
-import { syncAll } from './billing.products';
+import { defineBillingConfig } from './billing.config.js';
+import { handleBillingRoute } from './billing.routes.js';
+import { handleWebhook } from './billing.webhook.js';
+import { syncAll } from './billing.products.js';
 
 /** Options for `createBillingHandle()` */
 export interface BillingHandleOptions<Config extends BillingConfig = BillingConfig> {

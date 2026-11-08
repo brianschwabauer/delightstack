@@ -1,12 +1,12 @@
 import type { AuthClient } from '@delightstack/auth/client';
 import type { AuthSessionMeta } from '@delightstack/websocket/types';
-import { PresenceClient, type PresenceClientOptions } from '../core';
-import type { PresenceSession } from '../types';
-import { websocketTransport, type PresenceWebsocketClient } from './websocket.adapter';
-import { authIdentity } from './auth.adapter';
+import { PresenceClient, type PresenceClientOptions } from '../core/index.js';
+import type { PresenceSession } from '../types/index.js';
+import { websocketTransport, type PresenceWebsocketClient } from './websocket.adapter.js';
+import { authIdentity } from './auth.adapter.js';
 
-export { websocketTransport, type PresenceWebsocketClient } from './websocket.adapter';
-export { authIdentity } from './auth.adapter';
+export { websocketTransport, type PresenceWebsocketClient } from './websocket.adapter.js';
+export { authIdentity } from './auth.adapter.js';
 
 /**
  * Map a `@delightstack/websocket` Layer-0 session to the user it represents,

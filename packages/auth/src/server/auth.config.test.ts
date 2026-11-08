@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { defineAuthConfig } from './auth.config';
+import { defineAuthConfig } from './auth.config.js';
 
 describe('defineAuthConfig', () => {
 	const minimal = {

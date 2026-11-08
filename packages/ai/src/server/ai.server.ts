@@ -11,11 +11,14 @@ import type {
 	EmbeddingOptions,
 	EmbeddingResult,
 	AiErrorCode,
-} from '../types';
-import type { AiStreamChunkMessage, AiStreamErrorMessage } from '../types/message.type';
-import { createAiGateway, type AiGatewayClient } from './ai.gateway';
-import { aiEmbeddings } from './ai.embeddings';
-import { createAiError } from './ai.errors';
+} from '../types/index.js';
+import type {
+	AiStreamChunkMessage,
+	AiStreamErrorMessage,
+} from '../types/message.type.js';
+import { createAiGateway, type AiGatewayClient } from './ai.gateway.js';
+import { aiEmbeddings } from './ai.embeddings.js';
+import { createAiError } from './ai.errors.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 

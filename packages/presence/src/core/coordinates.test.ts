@@ -7,7 +7,7 @@ import {
 	normalizeCursor,
 	STAGE_ATTR,
 	type StageGeometry,
-} from './coordinates';
+} from './coordinates.js';
 
 const geo = (over: Partial<StageGeometry> = {}): StageGeometry => ({
 	left: 0,

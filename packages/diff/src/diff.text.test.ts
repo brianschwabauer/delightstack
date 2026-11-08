@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { diffLines, diffWords, tokenizeLines, tokenizeWords, type DiffOp } from './diff.text';
+import {
+	diffLines,
+	diffWords,
+	tokenizeLines,
+	tokenizeWords,
+	type DiffOp,
+} from './diff.text.js';
 
 /** Rebuild the old text from the ops. */
 function oldText(ops: DiffOp[]): string {
@@ -67,7 +73,16 @@ describe('tokenizeWords', () => {
 
 	it('splits CJK per character (no word separators in the script)', () => {
 		expect(tokenizeWords('你好世界')).toEqual(['你', '好', '世', '界']);
-		expect(tokenizeWords('日本語のテキスト')).toEqual(['日', '本', '語', 'の', 'テ', 'キ', 'ス', 'ト']);
+		expect(tokenizeWords('日本語のテキスト')).toEqual([
+			'日',
+			'本',
+			'語',
+			'の',
+			'テ',
+			'キ',
+			'ス',
+			'ト',
+		]);
 	});
 
 	it('keeps emoji grapheme clusters whole', () => {
@@ -152,8 +167,12 @@ describe('diffWords — realistic prose edit', () => {
 			.filter((op) => op.type === 'equal')
 			.map((op) => op.text)
 			.join('');
-		expect(equal_text).toContain('The harbour was quiet that morning, and the boats sat still against the pier.');
-		expect(equal_text).toContain('Inside, the smell of coffee and diesel argued with each other for the room.');
+		expect(equal_text).toContain(
+			'The harbour was quiet that morning, and the boats sat still against the pier.',
+		);
+		expect(equal_text).toContain(
+			'Inside, the smell of coffee and diesel argued with each other for the room.',
+		);
 		expect(equal_text).toContain('before she found the right door.');
 		expect(equal_text).toContain('Marta ');
 	});
@@ -214,7 +233,9 @@ describe('diffWords — markdown structure', () => {
 		const ops = diffWords(old_text, new_text);
 		expectWellFormed(ops, old_text, new_text);
 		expect(ops.filter((op) => op.type === 'delete')).toHaveLength(0);
-		expect(ops.filter((op) => op.type === 'insert').map((op) => op.text)).toEqual([' revised']);
+		expect(ops.filter((op) => op.type === 'insert').map((op) => op.text)).toEqual([
+			' revised',
+		]);
 	});
 });
 
@@ -262,9 +283,32 @@ describe('diffWords — unicode', () => {
 
 describe('diffWords — randomized round-trip property', () => {
 	const WORDS = [
-		'the', 'harbour', 'quiet', 'morning', 'boats', 'still', 'pier', 'Marta', 'walked',
-		'boardwalk', 'twice', 'door', 'coffee', 'diesel', 'argued', 'room', 'light', 'salt',
-		'你好', '世界', '🎉', '👍🏽', 'café', 'naïve', 'a', 'b',
+		'the',
+		'harbour',
+		'quiet',
+		'morning',
+		'boats',
+		'still',
+		'pier',
+		'Marta',
+		'walked',
+		'boardwalk',
+		'twice',
+		'door',
+		'coffee',
+		'diesel',
+		'argued',
+		'room',
+		'light',
+		'salt',
+		'你好',
+		'世界',
+		'🎉',
+		'👍🏽',
+		'café',
+		'naïve',
+		'a',
+		'b',
 	];
 	const PUNCTUATION = ['.', ',', '!', '?', ';', ':', '—', ')', '('];
 	const GAPS = [' ', '  ', '\n', '\n\n', '\t'];
@@ -289,7 +333,8 @@ describe('diffWords — randomized round-trip property', () => {
 			const index = Math.floor(random() * tokens.length);
 			const roll = random();
 			if (roll < 0.34) tokens.splice(index, 1);
-			else if (roll < 0.67) tokens.splice(index, 0, WORDS[Math.floor(random() * WORDS.length)]);
+			else if (roll < 0.67)
+				tokens.splice(index, 0, WORDS[Math.floor(random() * WORDS.length)]);
 			else tokens[index] = WORDS[Math.floor(random() * WORDS.length)];
 		}
 		return tokens.join('');
@@ -300,7 +345,8 @@ describe('diffWords — randomized round-trip property', () => {
 		for (let case_index = 0; case_index < 250; case_index++) {
 			const old_text = randomText(random, 40);
 			// Half the cases are related texts, half are independent.
-			const new_text = case_index % 2 === 0 ? mutate(random, old_text) : randomText(random, 40);
+			const new_text =
+				case_index % 2 === 0 ? mutate(random, old_text) : randomText(random, 40);
 			const ops = diffWords(old_text, new_text);
 			try {
 				expectWellFormed(ops, old_text, new_text);
@@ -315,10 +361,15 @@ describe('diffWords — randomized round-trip property', () => {
 
 	/** Reference LCS length via a naive DP table — only ever run on tiny inputs. */
 	function lcsLength(a: string[], b: string[]): number {
-		const table: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+		const table: number[][] = Array.from({ length: a.length + 1 }, () =>
+			new Array<number>(b.length + 1).fill(0),
+		);
 		for (let i = 1; i <= a.length; i++) {
 			for (let j = 1; j <= b.length; j++) {
-				table[i][j] = a[i - 1] === b[j - 1] ? table[i - 1][j - 1] + 1 : Math.max(table[i - 1][j], table[i][j - 1]);
+				table[i][j] =
+					a[i - 1] === b[j - 1]
+						? table[i - 1][j - 1] + 1
+						: Math.max(table[i - 1][j], table[i][j - 1]);
 			}
 		}
 		return table[a.length][b.length];
@@ -328,7 +379,8 @@ describe('diffWords — randomized round-trip property', () => {
 		const random = makeRandom(0xbeef_0001);
 		for (let case_index = 0; case_index < 200; case_index++) {
 			const old_text = randomText(random, 14);
-			const new_text = case_index % 2 === 0 ? mutate(random, old_text) : randomText(random, 14);
+			const new_text =
+				case_index % 2 === 0 ? mutate(random, old_text) : randomText(random, 14);
 			const old_tokens = tokenizeWords(old_text);
 			const new_tokens = tokenizeWords(new_text);
 			const ops = diffWords(old_text, new_text);
@@ -406,7 +458,9 @@ describe('diffLines', () => {
 		const ops = diffLines(old_text, new_text);
 		expectWellFormed(ops, old_text, new_text);
 		expect(ops.filter((op) => op.type === 'delete')).toHaveLength(0);
-		expect(ops.filter((op) => op.type === 'insert').map((op) => op.text)).toEqual(['middle\n']);
+		expect(ops.filter((op) => op.type === 'insert').map((op) => op.text)).toEqual([
+			'middle\n',
+		]);
 	});
 
 	it('round-trips text with mixed line endings', () => {

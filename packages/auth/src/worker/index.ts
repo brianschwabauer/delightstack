@@ -4,4 +4,4 @@
 export {
 	AuthDatabaseServer,
 	type AuthDatabaseServerOptions,
-} from '../server/auth.db.server';
+} from '../server/auth.db.server.js';

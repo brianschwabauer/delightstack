@@ -4,8 +4,8 @@ import type {
 	UserSignInMethod,
 	OauthAccount,
 	Passkey,
-} from '../types';
-import { resolveErrorCode, type AuthErrorCode } from '../types/error.type';
+} from '../types/index.js';
+import { resolveErrorCode, type AuthErrorCode } from '../types/error.type.js';
 import {
 	startRegistration,
 	startAuthentication,

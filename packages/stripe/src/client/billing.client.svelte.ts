@@ -3,7 +3,7 @@ import type {
 	PlanInfo,
 	PaymentMethodInfo,
 	InvoiceInfo,
-} from '../types';
+} from '../types/index.js';
 
 /** Serialized data for SSR hydration */
 export interface BillingClientData {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PresenceClient } from './presence.client.svelte';
+import { PresenceClient } from './presence.client.svelte.js';
 import type {
 	PresenceIdentity,
 	PresenceMessage,
@@ -7,7 +7,7 @@ import type {
 	PresenceTransport,
 	PresenceUpdateMessage,
 	PresenceReactionMessage,
-} from '../types';
+} from '../types/index.js';
 
 // ---------------------------------------------------------------------------
 // Test doubles: a transport that captures outgoing messages and lets a test

@@ -12,11 +12,11 @@ export type {
 	PresenceReactionMessage,
 	PresenceMessage,
 	PresenceEventMap,
-} from './presence.type';
+} from './presence.type.js';
 
 export type {
 	PresenceSession,
 	PresenceTransport,
 	IdentityUser,
 	PresenceIdentity,
-} from './ports.type';
+} from './ports.type.js';

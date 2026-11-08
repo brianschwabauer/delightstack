@@ -1,6 +1,6 @@
 import type { Cookies } from '@sveltejs/kit';
-import type { ResolvedAuthConfig } from '../server/auth.config';
-import { getSecretKey } from '../server/jwt.server';
+import type { ResolvedAuthConfig } from '../server/auth.config.js';
+import { getSecretKey } from '../server/jwt.server.js';
 
 // ── Session cookie (JWT) ──────────────────────────────────────
 

@@ -1,5 +1,5 @@
 import { Database } from '@delightstack/database';
-import { RESERVED_AI_FIELDS } from '../types';
+import { RESERVED_AI_FIELDS } from '../types/index.js';
 
 /** Extract the schema builder type from Database.table's callback parameter */
 type TableCallback = Parameters<typeof Database.table>[1];

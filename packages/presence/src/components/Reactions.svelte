@@ -15,9 +15,9 @@
 </script>
 
 <script lang="ts">
-	import { getPresence } from '../client/context';
-	import { denormalizeCursor } from '../core/coordinates';
-	import type { PresenceReactionMessage } from '../types';
+	import { getPresence } from '../client/context.js';
+	import { denormalizeCursor } from '../core/coordinates.js';
+	import type { PresenceReactionMessage } from '../types/index.js';
 
 	let { bar, duration = 2400, class: class_name = '' }: ReactionsProps = $props();
 

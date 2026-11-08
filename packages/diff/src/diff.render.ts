@@ -1,5 +1,5 @@
-import { DiffError } from './diff.error';
-import type { DiffOp, DiffOpType } from './diff.text';
+import { DiffError } from './diff.error.js';
+import type { DiffOp, DiffOpType } from './diff.text.js';
 
 const HTML_ESCAPES: Record<string, string> = {
 	'&': '&amp;',

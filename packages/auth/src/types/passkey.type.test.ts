@@ -3,7 +3,7 @@ import {
 	Passkey,
 	PasskeyRegistrationResponse,
 	PasskeyAuthenticationResponse,
-} from './passkey.type';
+} from './passkey.type.js';
 
 describe('Passkey', () => {
 	it('parses a full passkey record', () => {

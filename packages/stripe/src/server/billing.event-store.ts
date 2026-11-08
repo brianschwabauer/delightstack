@@ -1,4 +1,4 @@
-import type { WebhookEventStore } from './billing.config';
+import type { WebhookEventStore } from './billing.config.js';
 
 /**
  * Minimal structural interface for a `StripeEventStore` Durable Object

@@ -1,4 +1,4 @@
-import { DelightError } from './error.helper';
+import { DelightError } from './error.helper.js';
 
 // ---------------------------------------------------------------------------
 // Client-side: SvelteKit dev handle

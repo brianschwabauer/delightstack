@@ -1,4 +1,4 @@
-import type { PresenceMessage } from './presence.type';
+import type { PresenceMessage } from './presence.type.js';
 
 // ---------------------------------------------------------------------------
 // Ports — the two interfaces the presence core depends on. Anything that

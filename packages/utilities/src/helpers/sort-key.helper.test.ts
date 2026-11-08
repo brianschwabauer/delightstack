@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DelightError } from './error.helper';
-import { randomNumberGenerator } from './random.helper';
-import { generateSortKey } from './sort-key.helper';
+import { DelightError } from './error.helper.js';
+import { randomNumberGenerator } from './random.helper.js';
+import { generateSortKey } from './sort-key.helper.js';
 
 /** Asserts that every key is strictly greater than the one before it */
 function expectStrictlyOrdered(keys: string[]): void {

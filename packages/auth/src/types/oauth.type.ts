@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import { Meta } from './meta.type';
+import { Meta } from './meta.type.js';
 
 /**
  * Encodes the given OAuth scope names into a bitwise integer for storing in the database.

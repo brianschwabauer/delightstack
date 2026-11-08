@@ -1,6 +1,6 @@
 import type { Remote } from 'comlink';
 import type { DatabaseClientHooks } from '@delightstack/database';
-import type { WebsocketWorker } from './websocket.worker';
+import type { WebsocketWorker } from './websocket.worker.js';
 import type {
 	WebsocketMessage,
 	ConnectionStatus,
@@ -12,8 +12,8 @@ import type {
 	ErrorMessage,
 	AuthSessionMeta,
 	SessionInfo,
-} from '../types';
-import { getWsWorker } from './websocket.worker.init';
+} from '../types/index.js';
+import { getWsWorker } from './websocket.worker.init.js';
 
 // ---------------------------------------------------------------------------
 // Types

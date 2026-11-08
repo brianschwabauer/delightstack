@@ -1,4 +1,4 @@
-import type { Cursor } from '../types';
+import type { Cursor } from '../types/index.js';
 
 // ---------------------------------------------------------------------------
 // Stage-relative cursor coordinates.

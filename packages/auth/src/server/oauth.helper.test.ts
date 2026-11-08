@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { getOauthAccount, getOauthToken } from './oauth.helper';
+import { getOauthAccount, getOauthToken } from './oauth.helper.js';
 
 /** Builds an unsigned JWT with the given claims (only the payload segment is ever read) */
 function makeIdToken(claims: Record<string, unknown>) {

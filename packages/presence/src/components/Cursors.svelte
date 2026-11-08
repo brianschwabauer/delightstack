@@ -8,8 +8,8 @@
 </script>
 
 <script lang="ts">
-	import { getPresence } from '../client/context';
-	import { denormalizeCursor } from '../core/coordinates';
+	import { getPresence } from '../client/context.js';
+	import { denormalizeCursor } from '../core/coordinates.js';
 
 	let { show_self = false, class: class_name = '' }: CursorsProps = $props();
 

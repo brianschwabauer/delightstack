@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { DelightError } from '@delightstack/utilities';
-import type { ResolvedBillingConfig } from './billing.config';
-import type { PaymentMethodInfo, InvoiceInfo } from '../types';
+import type { ResolvedBillingConfig } from './billing.config.js';
+import type { PaymentMethodInfo, InvoiceInfo } from '../types/index.js';
 
 /** Cached Stripe instance per secret key */
 const stripe_instances = new Map<string, Stripe>();

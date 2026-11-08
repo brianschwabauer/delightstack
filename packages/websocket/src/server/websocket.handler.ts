@@ -1,5 +1,5 @@
 import type { Handle, RequestEvent } from '@sveltejs/kit';
-import type { WebsocketSessionMeta, AuthSessionMeta } from '../types';
+import type { WebsocketSessionMeta, AuthSessionMeta } from '../types/index.js';
 
 // ---------------------------------------------------------------------------
 // Minimal auth locals shape (used by default authorize behavior)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeWebsafeBase64, encodeWebsafeBase64 } from './url.helper';
+import { decodeWebsafeBase64, encodeWebsafeBase64 } from './url.helper.js';
 
 describe('websafe base64', () => {
 	it('round-trips plain strings', () => {

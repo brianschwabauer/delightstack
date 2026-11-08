@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { StripeEventStore } from './stripe-event-store';
-import { durableObjectEventStore } from '../server/billing.event-store';
+import { StripeEventStore } from './stripe-event-store.js';
+import { durableObjectEventStore } from '../server/billing.event-store.js';
 
 vi.mock('cloudflare:workers', () => {
 	class DurableObject {

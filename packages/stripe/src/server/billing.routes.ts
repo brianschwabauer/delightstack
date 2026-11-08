@@ -4,7 +4,7 @@ import type {
 	ResolvedBillingConfig,
 	AuthServerRpc,
 	WebsocketRpc,
-} from './billing.config';
+} from './billing.config.js';
 import { DelightError } from '@delightstack/utilities';
 import {
 	getStripe,
@@ -14,8 +14,12 @@ import {
 	parseBody,
 	getAppUrl,
 	resolveReturnUrl,
-} from './billing.stripe';
-import { syncSubscription, fetchSubscriptionState, activePlanIds } from './billing.sync';
+} from './billing.stripe.js';
+import {
+	syncSubscription,
+	fetchSubscriptionState,
+	activePlanIds,
+} from './billing.sync.js';
 
 export interface RouteContext {
 	getAuthServer?: (event: RequestEvent) => AuthServerRpc | undefined;

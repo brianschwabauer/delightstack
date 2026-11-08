@@ -3,9 +3,9 @@ import type {
 	ResolvedBillingConfig,
 	AuthServerRpc,
 	WebsocketRpc,
-} from './billing.config';
-import type { SubscriptionState } from '../types';
-import { getStripe, stripeCall } from './billing.stripe';
+} from './billing.config.js';
+import type { SubscriptionState } from '../types/index.js';
+import { getStripe, stripeCall } from './billing.stripe.js';
 
 export interface SyncContext {
 	config: ResolvedBillingConfig;

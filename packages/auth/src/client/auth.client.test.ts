@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AuthClient, type AuthClientData } from './auth.client.svelte';
-import type { SessionToken } from '../types';
+import { AuthClient, type AuthClientData } from './auth.client.svelte.js';
+import type { SessionToken } from '../types/index.js';
 
 function makeSession(
 	overrides: Partial<SessionToken<'auth'>> = {},

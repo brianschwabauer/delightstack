@@ -1,6 +1,6 @@
 import type { Attachment } from 'svelte/attachments';
-import type { PresenceClient } from '../core';
-import { getPresence } from './context';
+import type { PresenceClient } from '../core/index.js';
+import { getPresence } from './context.js';
 
 export interface FieldPresenceOptions {
 	/** Human-readable label for the field. Defaults to aria-label/placeholder/name/id. */

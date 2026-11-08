@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DiffError } from './diff.error';
-import { diffStructured, type StructuredChange } from './diff.structured';
+import { DiffError } from './diff.error.js';
+import { diffStructured, type StructuredChange } from './diff.structured.js';
 
 interface Block {
 	id: string;
@@ -39,9 +39,8 @@ function makeRandom(seed: number): () => number {
 
 /** Reference LCS length via a naive DP table — only ever run on tiny inputs. */
 function lcsLength(a: string[], b: string[]): number {
-	const table: number[][] = Array.from(
-		{ length: a.length + 1 },
-		() => new Array<number>(b.length + 1).fill(0),
+	const table: number[][] = Array.from({ length: a.length + 1 }, () =>
+		new Array<number>(b.length + 1).fill(0),
 	);
 	for (let i = 1; i <= a.length; i++) {
 		for (let j = 1; j <= b.length; j++) {
@@ -82,7 +81,11 @@ describe('diffStructured — degenerate inputs', () => {
 	it('reports an identical sequence as entirely unchanged', () => {
 		const items = blocks('a', 'b', 'c');
 		const result = diffStructured(items, items, blockKey);
-		expect(summarize(result.changes)).toEqual(['unchanged:a', 'unchanged:b', 'unchanged:c']);
+		expect(summarize(result.changes)).toEqual([
+			'unchanged:a',
+			'unchanged:b',
+			'unchanged:c',
+		]);
 		expect(result.changed).toBe(false);
 		expect(result.counts.unchanged).toBe(3);
 	});
@@ -147,12 +150,20 @@ describe('diffStructured — moves', () => {
 describe('diffStructured — inserts and deletes around moves', () => {
 	it('interleaves a deletion at the position it used to occupy', () => {
 		const result = diffStructured(blocks('a', 'b', 'c'), blocks('a', 'c'), blockKey);
-		expect(summarize(result.changes)).toEqual(['unchanged:a', 'deleted:b', 'unchanged:c']);
+		expect(summarize(result.changes)).toEqual([
+			'unchanged:a',
+			'deleted:b',
+			'unchanged:c',
+		]);
 	});
 
 	it('places an insertion at its new position', () => {
 		const result = diffStructured(blocks('a', 'c'), blocks('a', 'b', 'c'), blockKey);
-		expect(summarize(result.changes)).toEqual(['unchanged:a', 'inserted:b', 'unchanged:c']);
+		expect(summarize(result.changes)).toEqual([
+			'unchanged:a',
+			'inserted:b',
+			'unchanged:c',
+		]);
 	});
 
 	it('handles a move with an insert and a delete on either side', () => {

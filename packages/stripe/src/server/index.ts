@@ -7,19 +7,19 @@ export {
 	type AuthServerRpc,
 	type WebsocketRpc,
 	type WebhookEventStore,
-} from './billing.config';
+} from './billing.config.js';
 export {
 	durableObjectEventStore,
 	type StripeEventStoreNamespace,
-} from './billing.event-store';
-export { createBillingHandle, type BillingHandleOptions } from './billing.handler';
+} from './billing.event-store.js';
+export { createBillingHandle, type BillingHandleOptions } from './billing.handler.js';
 export {
 	syncSubscription,
 	fetchSubscriptionState,
 	type SyncContext,
-} from './billing.sync';
-export { syncProducts, syncMeters, syncAll } from './billing.products';
-export { reportMeterEvent, createMeterReporter } from './billing.meter';
-export { getStripe, stripeCall } from './billing.stripe';
-export { handleWebhook } from './billing.webhook';
-export { ensureWebhookRegistered } from './billing.webhook.register';
+} from './billing.sync.js';
+export { syncProducts, syncMeters, syncAll } from './billing.products.js';
+export { reportMeterEvent, createMeterReporter } from './billing.meter.js';
+export { getStripe, stripeCall } from './billing.stripe.js';
+export { handleWebhook } from './billing.webhook.js';
+export { ensureWebhookRegistered } from './billing.webhook.register.js';

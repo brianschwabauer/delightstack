@@ -1,2 +1,2 @@
-export * from './billing.type';
-export * from './webhook.type';
+export * from './billing.type.js';
+export * from './webhook.type.js';

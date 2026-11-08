@@ -1,1 +1,1 @@
-export { createBillingGuards } from './guards';
+export { createBillingGuards } from './guards.js';

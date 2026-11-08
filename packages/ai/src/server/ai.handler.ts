@@ -1,6 +1,10 @@
 import { DelightError } from '@delightstack/utilities';
-import type { RequestEventLike, CompletionOptions, EmbeddingOptions } from '../types';
-import type { AiServer } from './ai.server';
+import type {
+	RequestEventLike,
+	CompletionOptions,
+	EmbeddingOptions,
+} from '../types/index.js';
+import type { AiServer } from './ai.server.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 

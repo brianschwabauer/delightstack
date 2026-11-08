@@ -1,1 +1,4 @@
-export { WebsocketClient, type WebsocketClientConfig } from './websocket.client.svelte';
+export {
+	WebsocketClient,
+	type WebsocketClientConfig,
+} from './websocket.client.svelte.js';

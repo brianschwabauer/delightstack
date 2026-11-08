@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encodeOauthScopes, decodeOauthScopes } from './oauth.type';
+import { encodeOauthScopes, decodeOauthScopes } from './oauth.type.js';
 
 const scopes = ['profile', 'email', 'calendar', 'contacts'] as const;
 

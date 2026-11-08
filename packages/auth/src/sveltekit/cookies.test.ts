@@ -6,7 +6,7 @@ import {
 	serializeDeleteSessionCookie,
 	serializePreferencesCookie,
 	serializeOrgStateCookie,
-} from './cookies';
+} from './cookies.js';
 
 // A valid hex-encoded HMAC-SHA256 secret (64 hex chars = 32 bytes)
 const SECRET = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';

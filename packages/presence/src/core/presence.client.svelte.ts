@@ -13,15 +13,15 @@ import type {
 	PresenceStatus,
 	PresenceUpdateMessage,
 	PresenceReactionMessage,
-} from '../types';
-import { userColor } from './color';
+} from '../types/index.js';
+import { userColor } from './color.js';
 import {
 	mergeUpdate,
 	applySnapshot,
 	removePeer,
 	pruneStale,
 	dedupeUsers,
-} from './awareness';
+} from './awareness.js';
 
 export interface PresenceClientOptions {
 	/** The relay. Wrap `@delightstack/websocket` with the default adapter, or supply your own. */

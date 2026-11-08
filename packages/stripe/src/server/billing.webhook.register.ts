@@ -1,7 +1,7 @@
 import type Stripe from 'stripe';
-import type { ResolvedBillingConfig } from './billing.config';
+import type { ResolvedBillingConfig } from './billing.config.js';
 import { DelightError } from '@delightstack/utilities';
-import { getStripe, stripeCall } from './billing.stripe';
+import { getStripe, stripeCall } from './billing.stripe.js';
 
 /** Webhook events the billing system needs to listen to */
 const REQUIRED_EVENTS: Stripe.WebhookEndpointCreateParams.EnabledEvent[] = [

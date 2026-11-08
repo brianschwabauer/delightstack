@@ -9,9 +9,9 @@
 		"./components/*": "./packages/components/dist/*"
 	},
 	"scripts": {
-		"build": "turbo run build",
+		"build": "turbo run build && node scripts/check-dist-specifiers.mjs",
 		"build:ci": "turbo run build --filter=./apps/app --filter=!@packages/api",
-		"test": "turbo run test --parallel",
+		"test": "turbo run test --parallel && node scripts/check-dist-specifiers.mjs",
 		"dev": "turbo run dev --parallel --filter=./apps/site --filter=./packages/components --filter=./packages/utilities",
 		"dev:example": "turbo run dev:svelte dev:worker --parallel --filter=@delightstack/example-app --filter=@delightstack/editor",
 		"dev:docs": "turbo run dev --parallel --filter=./apps/docs --filter=./packages/components --filter=./packages/utilities",
@@ -19,6 +19,7 @@
 		"format:check": "oxfmt --check",
 		"lint": "oxlint",
 		"lint:fix": "oxlint --fix",
+		"check:dist": "node scripts/check-dist-specifiers.mjs",
 		"typecheck": "turbo run typecheck",
 		"check": "turbo run check"
 	},

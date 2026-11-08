@@ -1,7 +1,7 @@
 import type { Attachment } from 'svelte/attachments';
-import { normalizeCursor } from '../core/coordinates';
-import type { PresenceClient } from '../core';
-import { getPresence } from './context';
+import { normalizeCursor } from '../core/coordinates.js';
+import type { PresenceClient } from '../core/index.js';
+import { getPresence } from './context.js';
 
 export interface TrackCursorOptions {
 	/**

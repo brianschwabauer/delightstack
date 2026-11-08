@@ -1,2 +1,2 @@
-export * from './date.helper.svelte';
-export * from './debounce.helper.svelte';
+export * from './date.helper.svelte.js';
+export * from './debounce.helper.svelte.js';
