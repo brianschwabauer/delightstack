@@ -946,9 +946,18 @@
 				oklch(from currentColor l c h / 0.24)
 			);
 		}
+		/* Uncoloured outline/transparent/translucent buttons take the theme's
+		   selected colour (--color-selected-bg/text), so a selected option,
+		   a nav link's current page and a menu's current value all match.
+		   The accent/error/success/warning variants keep the wash of their
+		   own colour above. */
+		&:is(.outline, .transparent, .translucent):not(.accent, .error, .success, .warning) {
+			--color-bg-selected: var(--color-selected-bg);
+			--color-text-selected: var(--color-selected-text);
+		}
 		&.active {
 			--color-bg: var(--color-bg-selected, var(--color-bg-active)) !important;
-			--color-text: var(--color-text-active) !important;
+			--color-text: var(--color-text-selected, var(--color-text-active)) !important;
 			/* Already selected: hovering it shouldn't fade back to the hover tint. */
 			> :is(button, a):hover:not(:disabled):not([aria-disabled='true']):not(
 					[aria-busy='true']

@@ -413,12 +413,20 @@
 		display: flex;
 		align-items: center;
 		--_radius: calc(var(--radius-lg) * 1.5);
+		/* Selected: the theme's selected colour (--color-selected-bg/text),
+		   the same as a selected Button. It used to be the hover wash at the
+		   same strength, so a chosen row read as a hovered one. */
 		&.active {
 			a,
 			button,
 			label {
+				color: var(--color-selected-text);
+				/* Solid now, not a faint wash: under the text, not over it */
+				isolation: isolate;
 				&::before {
-					opacity: 0.06;
+					opacity: 1;
+					z-index: -1;
+					background-color: var(--color-selected-bg);
 					/* Snap the active highlight in instantly (so keyboard navigation —
 					   e.g. arrowing an autocomplete list — feels immediate). The base
 					   ::before rule still eases it out when the item is deselected. */
@@ -427,8 +435,14 @@
 						border-radius 150ms ease;
 				}
 			}
+			.text-content {
+				color: var(--color-selected-text);
+				isolation: isolate;
+			}
 			.text-content::before {
-				opacity: 0.06;
+				opacity: 1;
+				z-index: -1;
+				background-color: var(--color-selected-bg);
 				transition:
 					opacity 0ms ease,
 					border-radius 150ms ease;
@@ -535,7 +549,7 @@
 			   here so the whole row reads as not-interactive. */
 			cursor: not-allowed;
 		}
-		&:not(.disabled) {
+		&:not(.disabled):not(.active) {
 			a,
 			button,
 			label {

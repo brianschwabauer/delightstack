@@ -287,6 +287,15 @@ html {
 	--color-warning-bg: color-mix(in oklab, var(--color-warning) 16%, var(--color-surface));
 	--color-error-bg: color-mix(in oklab, var(--color-error) 14%, var(--color-surface));
 
+	/* --- Selected ---
+	   The one that's chosen: the option set in a ButtonGroup, an `active`
+	   Button (the page a nav link is on), an `active` ListItem (the current
+	   value in a menu). One colour for all of them, so "selected" reads the
+	   same everywhere, and a tint, not a grey: a grey wash is what hover is.
+	   Themes set these two to restyle every selected state at once. */
+	--color-selected-bg: var(--color-action-bg);
+	--color-selected-text: var(--color-action-fg);
+
 	/* --- Overlay --- */
 	--color-backdrop: light-dark(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.7));
 
