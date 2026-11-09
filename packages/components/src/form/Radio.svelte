@@ -17,7 +17,7 @@
 
 <script lang="ts">
 	import { ripple, tooltip } from '@delightstack/utilities';
-	import { getContext, setContext, type Snippet } from 'svelte';
+	import { getContext, setContext, untrack, type Snippet } from 'svelte';
 	import type { FormContext } from './Form.svelte';
 
 	const propId = $props.id();
@@ -168,18 +168,38 @@
 
 	let animating = $state(false);
 
+	/* Animate every time this radio becomes selected — not only when it is
+	   clicked: a group value set from outside, or a parent driving `checked`
+	   (List's radio mode), gets the same spring dot + ring pulse. `$effect.pre`
+	   so the class lands in the same DOM update as `.selected`. */
+	let animated_selected = untrack(() => isSelected);
+	let animation_timer: ReturnType<typeof setTimeout> | undefined;
+	// Values that settle during mount (a Form context filling in the initial
+	// state from an effect) aren't changes the user should see animate.
+	let mounted = false;
+	$effect(() => {
+		const t = setTimeout(() => (mounted = true));
+		return () => clearTimeout(t);
+	});
+	$effect.pre(() => {
+		const now = isSelected;
+		if (now === animated_selected) return;
+		animated_selected = now;
+		if (!mounted) return;
+		if (!now) return;
+		animating = true;
+		clearTimeout(animation_timer);
+		animation_timer = setTimeout(() => (animating = false), 350);
+	});
+	$effect(() => () => clearTimeout(animation_timer));
+
 	function select() {
 		if (isDisabled) return;
-		const wasSelected = isSelected;
 		if (group) {
 			group.select(value);
 		} else {
 			checked = true;
 			onchange?.({ value });
-		}
-		if (!wasSelected) {
-			animating = true;
-			setTimeout(() => (animating = false), 350);
 		}
 	}
 
@@ -362,6 +382,7 @@
 		width: fit-content;
 		cursor: pointer;
 		user-select: none;
+		-webkit-tap-highlight-color: transparent;
 		position: relative;
 		perspective: 100px;
 		transition: translate 200ms ease;
@@ -522,15 +543,23 @@
 	   spinners keep spinning (a frozen ring stops reading as "busy"). */
 	@media (prefers-reduced-motion: reduce) {
 		.radio-group,
-		.radio-group * {
+		.radio-group *,
+		.radio,
+		.radio * {
 			transition-property:
 				color, background-color, border-color, opacity, fill, stroke, box-shadow !important;
 		}
 		.radio-group:active,
 		.radio-group *:active,
-		.radio-group *:hover {
+		.radio-group *:hover,
+		.radio:active,
+		.radio *:active,
+		.radio *:hover {
 			translate: none !important;
 			scale: none !important;
+		}
+		.indicator {
+			animation: none !important;
 		}
 	}
 </style>

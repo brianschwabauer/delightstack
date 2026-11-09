@@ -130,11 +130,34 @@
 		return '';
 	});
 
+	/* Animate every change of the checked state, not just clicks on this
+	   control: a parent driving `checked` (List's checkbox mode, a "select
+	   all", a form reset) gets the same spring draw + pulse. `$effect.pre`
+	   so the animating class lands in the same DOM update as `.checked` —
+	   otherwise the plain transition would start a frame early. */
+	let animated_checked = untrack(() => is_checked);
+	let animation_timer: ReturnType<typeof setTimeout> | undefined;
+	// Values that settle during mount (a Form context filling in the initial
+	// state from an effect) aren't changes the user should see animate.
+	let mounted = false;
+	$effect(() => {
+		const t = setTimeout(() => (mounted = true));
+		return () => clearTimeout(t);
+	});
+	$effect.pre(() => {
+		const now = is_checked;
+		if (now === animated_checked) return;
+		animated_checked = now;
+		if (!mounted) return;
+		animation = now ? 'check' : 'uncheck';
+		clearTimeout(animation_timer);
+		animation_timer = setTimeout(() => (animation = 'none'), now ? 350 : 50);
+	});
+	$effect(() => () => clearTimeout(animation_timer));
+
 	function toggle() {
 		if (disabled) return;
 		checked = !is_checked;
-		animation = checked ? 'check' : 'uncheck';
-		setTimeout(() => (animation = 'none'), checked ? 350 : 50);
 		if (form_ctx && name) {
 			form_ctx.setValue(name, checked);
 			form_ctx.setTouched(name);
@@ -250,6 +273,7 @@
 		width: fit-content;
 		cursor: pointer;
 		user-select: none;
+		-webkit-tap-highlight-color: transparent;
 		position: relative;
 		perspective: 100px;
 		transition: translate 200ms ease;
@@ -474,6 +498,9 @@
 		.checkbox *:hover {
 			translate: none !important;
 			scale: none !important;
+		}
+		.indicator {
+			animation: none !important;
 		}
 	}
 </style>
