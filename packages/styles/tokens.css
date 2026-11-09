@@ -1,5 +1,11 @@
 html {
 	color-scheme: light dark;
+	/* Mobile browsers paint a translucent box over whatever element takes a tap
+	   (a checkbox's whole label row, a list item, a card). Every component
+	   brings its own press/ripple feedback, so kill the box here: the property
+	   inherits, so this covers the whole page — portaled popovers and menus
+	   included — even in apps that load the tokens without global.css. */
+	-webkit-tap-highlight-color: transparent;
 
 	/* ============================================================
 	 * TIER 1 — PRIMITIVES (internal)
