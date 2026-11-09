@@ -198,6 +198,7 @@
 			shiftX = 0;
 			shiftY = 0;
 			flipped = false;
+			fitHeight = undefined;
 			tick().then(() => (shown = true));
 		} else {
 			shown = false;
@@ -233,6 +234,8 @@
 	 * main axis alone.
 	 */
 	let flipped = $state(false);
+	/** A height cap for a popover too tall for the room on either side. */
+	let fitHeight = $state<string | undefined>(undefined);
 	const OPPOSITE_SIDE = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
 	const tryPlacement = $derived.by((): PopoverPlacement => {
 		if (!flipped) return placement;
@@ -414,24 +417,26 @@
 	} {
 		const minStart = startRadius + ARROW_HALF_BASE;
 		const minEnd = length - endRadius - ARROW_HALF_BASE;
-		let arrow = ideal;
-		let shift = 0;
+		const clamp = (value: number, low: number, high: number) =>
+			Math.min(Math.max(value, low), high);
+		// The least shift that lets the arrow clear the corners, kept inside
+		// the viewport: staying on screen wins over the arrow (a popover wider
+		// than the viewport keeps its start edge in view).
+		const shift = clamp(
+			clamp(0, ideal - minEnd, ideal - minStart),
+			shiftMin,
+			Math.max(shiftMin, shiftMax),
+		);
+		let arrow = ideal - shift;
 		let start_radius: number | undefined;
 		let end_radius: number | undefined;
-		if (ideal < minStart) {
-			shift = Math.max(ideal - minStart, Math.min(shiftMin, 0));
-			arrow = ideal - shift;
-			if (arrow < minStart) {
-				start_radius = Math.max(0, arrow - ARROW_HALF_BASE);
-				arrow = Math.max(ARROW_HALF_BASE, arrow);
-			}
-		} else if (ideal > minEnd) {
-			shift = Math.min(ideal - minEnd, Math.max(shiftMax, 0));
-			arrow = ideal - shift;
-			if (arrow > minEnd) {
-				end_radius = Math.max(0, length - arrow - ARROW_HALF_BASE);
-				arrow = Math.min(length - ARROW_HALF_BASE, arrow);
-			}
+		// Still too near a corner: flatten that corner under the arrow
+		if (arrow < minStart) {
+			start_radius = Math.max(0, arrow - ARROW_HALF_BASE);
+			arrow = Math.max(ARROW_HALF_BASE, arrow);
+		} else if (arrow > minEnd) {
+			end_radius = Math.max(0, length - arrow - ARROW_HALF_BASE);
+			arrow = Math.min(length - ARROW_HALF_BASE, arrow);
 		}
 		return { arrow, shift, start_radius, end_radius };
 	}
@@ -493,16 +498,24 @@
 		// has moved
 		const side = placement.split('-')[0];
 		const vertical = side === 'top' || side === 'bottom';
-		const size = vertical ? popRect.height : popRect.width;
+		// Its full height, as if nothing capped it (see `fitHeight`)
+		const content = popoverElement.querySelector<HTMLElement>(':scope > .content');
+		const size = vertical
+			? popRect.height + (content ? content.scrollHeight - content.clientHeight : 0)
+			: popRect.width;
 		const room_before = (vertical ? refRect.top : refRect.left) - anchorOffset;
 		const room_after =
 			(vertical
 				? window.innerHeight - refRect.bottom
 				: window.innerWidth - refRect.right) - anchorOffset;
 		const goes_after = side === 'bottom' || side === 'right';
-		const flip =
-			size > (goes_after ? room_after : room_before) &&
-			size <= (goes_after ? room_before : room_after);
+		const own_room = goes_after ? room_after : room_before;
+		const other_room = goes_after ? room_before : room_after;
+		// Too tall for either side: the roomier one, scrolling inside
+		const room = Math.max(own_room, other_room);
+		fitHeight =
+			vertical && size > room ? `${Math.max(room - VIEWPORT_MARGIN, 0)}px` : undefined;
+		const flip = size > own_room && (size <= other_room || other_room > own_room);
 		if (flip !== flipped) {
 			flipped = flip;
 			requestAnimationFrame(() => detectAndUpdate());
@@ -1044,6 +1057,7 @@
 			style:--popover-radius={radius}
 			style:transform-origin={transformOrigin}
 			style:translate={shiftX || shiftY ? `${shiftX}px ${shiftY}px` : undefined}
+			style:max-height={fitHeight}
 			style:border-top-left-radius={cornerRadii.tl}
 			style:border-top-right-radius={cornerRadii.tr}
 			style:border-bottom-right-radius={cornerRadii.br}
