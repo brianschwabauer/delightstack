@@ -128,6 +128,8 @@
 	let drag_mode: 'none' | 'pending' | 'sheet' | 'native' = 'none';
 	let drag_from_content = false;
 	let drag_from_handle = false;
+	/** What a press in the content would scroll: the content, or a scroller inside it. */
+	let press_scroller: HTMLElement | null = null;
 	let start_y = 0;
 	let start_offset = 0;
 	let last_y = 0;
@@ -277,6 +279,21 @@
 		});
 	});
 
+	// --- Follow the snap's height when it changes ---
+	// The content grew or shrank (a short sheet is capped at its content), or
+	// the snap points moved: a sheet at rest settles at its snap's new height
+	// instead of staying where the old one was.
+	// Tracks the busy flags too, so a change that lands mid-animation (new
+	// content mounting as a snap starts) is caught when the sheet comes to rest.
+	$effect(() => {
+		const height = snap_heights[current_snap];
+		const busy = !open || dragging || animating;
+		untrack(() => {
+			if (busy || height == null) return;
+			if (Math.abs(offset - height) > 1) animateSheet(height, 450, expoOut);
+		});
+	});
+
 	// --- Snapping ---
 	function nearestSnapIndex(y: number): number {
 		let best = 0;
@@ -362,14 +379,34 @@
 	function isWithinHandle(target: EventTarget | null) {
 		return target instanceof Element && !!target.closest('.handle');
 	}
+	/**
+	 * The scroller a press inside the content would scroll: the nearest one
+	 * between the target and the content that can scroll vertically (a chat
+	 * feed in its own box), else the content itself. "At the top" means at
+	 * the top of this one, so pulling down a scrolled feed scrolls the feed
+	 * instead of dragging the sheet.
+	 */
+	function scrollerFor(target: EventTarget | null): HTMLElement | null {
+		let el = target instanceof Element ? target : null;
+		while (el && el !== content_el) {
+			if (el instanceof HTMLElement && el.scrollHeight > el.clientHeight + 1) {
+				const overflow = getComputedStyle(el).overflowY;
+				if (overflow === 'auto' || overflow === 'scroll') return el;
+			}
+			el = el.parentElement;
+		}
+		return content_el ?? null;
+	}
+	const scrolledFromTop = () => (press_scroller?.scrollTop ?? 0) > 0;
 
 	function onPanelPointerDown(e: PointerEvent) {
 		if (e.button === 2 || active_pointer !== null) return;
 		drag_from_content = isWithinContent(e.target);
 		drag_from_handle = isWithinHandle(e.target);
+		press_scroller = drag_from_content ? scrollerFor(e.target) : null;
 
 		// Already scrolled down inside the content: let the browser scroll it.
-		if (drag_from_content && at_max && content_el && content_el.scrollTop > 0) {
+		if (drag_from_content && at_max && scrolledFromTop()) {
 			drag_mode = 'native';
 			return;
 		}
@@ -400,8 +437,7 @@
 			if (Math.abs(total) < DRAG_THRESHOLD) return;
 			if (drag_from_content && at_max) {
 				const pulling_down = total < 0;
-				const at_top = !content_el || content_el.scrollTop <= 0;
-				if (pulling_down && at_top) {
+				if (pulling_down && !scrolledFromTop()) {
 					drag_mode = 'sheet';
 				} else {
 					// Hand the gesture back to the browser for native scrolling.
@@ -490,8 +526,7 @@
 		}
 		if (drag_mode !== 'pending' || !drag_from_content || !at_max) return;
 		const pulling_down = e.touches[0].clientY > start_y;
-		const at_top = !content_el || content_el.scrollTop <= 0;
-		if (pulling_down && at_top) e.preventDefault();
+		if (pulling_down && !scrolledFromTop()) e.preventDefault();
 	}
 
 	function onBackdropPointerDown() {
