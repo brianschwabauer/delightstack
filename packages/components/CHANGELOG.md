@@ -1,5 +1,11 @@
 # @delightstack/components
 
+## 2.0.3
+
+### Patch Changes
+
+- 8a8b068: Popover stays on screen: a popover wider than the room beside its target slides back inside the viewport instead of hanging off the edge (the arrow still points at the target, flattening a corner if it has to), and one too tall for either side of its target takes the roomier side and scrolls inside.
+
 ## 2.0.2
 
 ### Patch Changes
