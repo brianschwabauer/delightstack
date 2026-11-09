@@ -1,5 +1,11 @@
 # @delightstack/styles
 
+## 1.3.0
+
+### Minor Changes
+
+- ba8a51d: One "selected" colour: new `--color-selected-bg` and `--color-selected-text` tokens (a tint of the action colour by default) style every selected state. An `active` uncoloured Button (outline, transparent, translucent), the chosen option of a ButtonGroup and an `active` ListItem now match, instead of three different grey washes; the accent/error/success/warning variants keep their own colour. A selected ListItem no longer looks like a hovered one (both were the same 6% wash), and hovering it keeps its selected colour.
+
 ## 1.2.1
 
 ### Patch Changes
