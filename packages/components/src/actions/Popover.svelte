@@ -197,6 +197,7 @@
 			cornerRadii = {};
 			shiftX = 0;
 			shiftY = 0;
+			flipped = false;
 			tick().then(() => (shown = true));
 		} else {
 			shown = false;
@@ -221,12 +222,30 @@
 		}
 	});
 
+	/**
+	 * Whether the popover goes on the other side of its target from
+	 * `placement`. The CSS below already flips on its own through
+	 * `position-try-fallbacks`, but the browser only takes a fallback that fits
+	 * on both axes. A popover wider than the room beside its target sticks out
+	 * on the cross axis wherever it goes (the shift in detectAndUpdate brings it
+	 * back on screen), so the browser keeps the first placement and the popover
+	 * hangs off the bottom of the screen. detectAndUpdate sets this from the
+	 * main axis alone.
+	 */
+	let flipped = $state(false);
+	const OPPOSITE_SIDE = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+	const tryPlacement = $derived.by((): PopoverPlacement => {
+		if (!flipped) return placement;
+		const [side, align] = placement.split('-') as [keyof typeof OPPOSITE_SIDE, string?];
+		return `${OPPOSITE_SIDE[side]}${align ? `-${align}` : ''}` as PopoverPlacement;
+	});
+
 	// CSS anchor positioning style for real element path
 	const anchorPositionStyle = $derived.by(() => {
 		if (!ref_element) return '';
 		const anchor = `--popover-anchor-${id}`;
 		const parts = [`position: ${strategy}`, `position-anchor: ${anchor}`, 'inset: auto'];
-		switch (placement) {
+		switch (tryPlacement) {
 			case 'bottom':
 				parts.push(
 					`top: anchor(bottom)`,
@@ -468,6 +487,27 @@
 		if (!popoverElement || !ref_element) return;
 		const popRect = layoutRect(popoverElement);
 		const refRect = ref_element.getBoundingClientRect();
+
+		// Flip to the other side when the popover doesn't fit on its own side
+		// but does on the other (see `flipped`), then measure again once it
+		// has moved
+		const side = placement.split('-')[0];
+		const vertical = side === 'top' || side === 'bottom';
+		const size = vertical ? popRect.height : popRect.width;
+		const room_before = (vertical ? refRect.top : refRect.left) - anchorOffset;
+		const room_after =
+			(vertical
+				? window.innerHeight - refRect.bottom
+				: window.innerWidth - refRect.right) - anchorOffset;
+		const goes_after = side === 'bottom' || side === 'right';
+		const flip =
+			size > (goes_after ? room_after : room_before) &&
+			size <= (goes_after ? room_before : room_after);
+		if (flip !== flipped) {
+			flipped = flip;
+			requestAnimationFrame(() => detectAndUpdate());
+			return;
+		}
 
 		// Detect primary axis based on which side of the ref the popover ended up
 		const suffix = placement.includes('-') ? '-' + placement.split('-')[1] : '';
