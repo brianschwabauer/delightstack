@@ -419,13 +419,23 @@
 		last_t = e.timeStamp;
 		velocity = 0;
 
-		window.addEventListener('pointermove', onPointerMove, { passive: false });
-		window.addEventListener('pointerup', onPointerUp);
-		window.addEventListener('pointercancel', onPointerUp);
+		// Capture phase: an element under the finger may stop the event (a
+		// Popover trigger stops its pointerup), and a press whose end the sheet
+		// never hears leaves it mid-gesture, following the next move and
+		// ignoring every press after.
+		window.addEventListener('pointermove', onPointerMove, { passive: false, capture: true });
+		window.addEventListener('pointerup', onPointerUp, true);
+		window.addEventListener('pointercancel', onPointerUp, true);
 	}
 
 	function onPointerMove(e: PointerEvent) {
 		if (e.pointerId !== active_pointer) return;
+		// A mouse moving with no button down: the press ended somewhere the
+		// sheet didn't hear (a window switch, a dialog); end it here
+		if (e.pointerType === 'mouse' && e.buttons === 0) {
+			onPointerUp(e);
+			return;
+		}
 
 		const total = start_y - e.clientY; // positive = moved up
 		const dt = Math.max(1, e.timeStamp - last_t);
@@ -483,9 +493,9 @@
 	}
 
 	function teardownPointer() {
-		window.removeEventListener('pointermove', onPointerMove);
-		window.removeEventListener('pointerup', onPointerUp);
-		window.removeEventListener('pointercancel', onPointerUp);
+		window.removeEventListener('pointermove', onPointerMove, true);
+		window.removeEventListener('pointerup', onPointerUp, true);
+		window.removeEventListener('pointercancel', onPointerUp, true);
 		document.body.style.userSelect = '';
 		active_pointer = null;
 		drag_mode = 'none';
