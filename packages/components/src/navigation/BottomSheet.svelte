@@ -101,6 +101,7 @@
 	// --- Tuning constants ---
 	const DRAG_THRESHOLD = 4; // px of movement before a press becomes a drag
 	const FLICK_VELOCITY = 0.4; // px/ms that counts as a fast swipe
+	const FLICK_STALE_MS = 100; // a finger still this long before lifting isn't flicking
 	const DISMISS_FACTOR = 0.5; // release below this fraction of the lowest snap dismisses
 	const RUBBER = 0.15; // resistance when overscrolling past the top
 
@@ -428,6 +429,10 @@
 
 	function onPointerUp(e: PointerEvent) {
 		if (e.pointerId !== active_pointer) return;
+		// The browser took the gesture (it started a scroll or a zoom), or the
+		// finger came to rest before lifting: either way it isn't a flick, so
+		// settle on the nearest snap.
+		if (e.type === 'pointercancel' || e.timeStamp - last_t > FLICK_STALE_MS) velocity = 0;
 		const mode = drag_mode;
 		const tapped_handle =
 			drag_from_handle && Math.abs(start_y - e.clientY) < DRAG_THRESHOLD;
@@ -469,6 +474,26 @@
 		else snapTo(nearest);
 	}
 
+	/**
+	 * Fully open, the content scrolls natively (`touch-action: pan-y`), so a
+	 * finger pulling down from its top would start a native pan: the browser
+	 * cancels the pointer and the sheet never follows. Cancelling the touch
+	 * move keeps the gesture ours, so the sheet tracks the finger like it
+	 * does from the handle. Pointer events come before their touch events,
+	 * so `drag_mode` is already decided for this move.
+	 */
+	function onPanelTouchMove(e: TouchEvent) {
+		if (!e.cancelable || active_pointer === null || e.touches.length !== 1) return;
+		if (drag_mode === 'sheet') {
+			e.preventDefault();
+			return;
+		}
+		if (drag_mode !== 'pending' || !drag_from_content || !at_max) return;
+		const pulling_down = e.touches[0].clientY > start_y;
+		const at_top = !content_el || content_el.scrollTop <= 0;
+		if (pulling_down && at_top) e.preventDefault();
+	}
+
 	function onBackdropPointerDown() {
 		dismiss();
 	}
@@ -484,9 +509,11 @@
 		const panel = panel_el;
 		const back = backdrop_el;
 		panel?.addEventListener('pointerdown', onPanelPointerDown);
+		panel?.addEventListener('touchmove', onPanelTouchMove, { passive: false });
 		back?.addEventListener('pointerdown', onBackdropPointerDown);
 		return () => {
 			panel?.removeEventListener('pointerdown', onPanelPointerDown);
+			panel?.removeEventListener('touchmove', onPanelTouchMove);
 			back?.removeEventListener('pointerdown', onBackdropPointerDown);
 		};
 	});
@@ -498,8 +525,14 @@
 <svelte:window onkeydown={open ? onKeyDown : undefined} />
 
 {#if visible}
+	<!-- Into the shared .portals layer, not straight into <body>: a popover
+	     opened from inside the sheet portals there too, after the sheet.
+	     CSS anchor positioning only accepts an anchor (the popover's
+	     trigger) whose fixed-position ancestor comes before the popover;
+	     with the sheet appended to <body> after .portals, every popover
+	     opened from it fell back to the bottom of the page, off screen. -->
 	<div
-		use:portal={'body'}
+		use:portal={'.portals'}
 		{id}
 		class={['bottom-sheet', class_name].filter(Boolean).join(' ')}
 		class:dragging
@@ -608,6 +641,9 @@
 		pointer-events: auto;
 		cursor: grab;
 		touch-action: none;
+		/* The content's own backgrounds start under the handle, where the
+		   corner is still curving: clip them to it */
+		overflow: clip;
 		&:not(:has(> .handle)) {
 			padding-top: 1.5rem;
 		}
