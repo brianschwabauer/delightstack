@@ -1038,14 +1038,26 @@
 			}
 			&.transparent,
 			&.translucent {
-				.badge {
-					top: 0.5em;
-					right: 0.5em;
-
-					&.dot {
-						top: 0.75em;
-						right: 0.75em;
-					}
+				/* With no visible circle, the badge belongs to the glyph: it is
+				   centred on the icon's top-right corner (--_icon-inset from the
+				   button's edges), sized to the icon rather than the button, and
+				   the cutout below is concentric with it. 0.625em font × 1.6em
+				   height = a 1em badge, so its radius is 0.5em of the button. */
+				.badge:not(.dot) {
+					font-size: 0.625em;
+					line-height: 1;
+					font-weight: 600;
+					box-sizing: border-box;
+					height: 1.6em;
+					min-width: 1.6em;
+					min-height: 0;
+					padding: 0 0.45em;
+					top: calc(var(--_icon-inset) - 0.8em);
+					right: calc(var(--_icon-inset) - 0.8em);
+				}
+				.badge.dot {
+					top: calc(var(--_icon-inset) - 0.375rem);
+					right: calc(var(--_icon-inset) - 0.375rem);
 				}
 			}
 		}
@@ -1097,9 +1109,9 @@
 			button,
 			a {
 				mask-image: radial-gradient(
-					circle at calc(100% - 0.75em) 0.75em,
-					transparent 0.5em,
-					black calc(0.5em + 0.5px)
+					circle at calc(100% - var(--_icon-inset)) var(--_icon-inset),
+					transparent calc(0.5em + 2px),
+					black calc(0.5em + 2.5px)
 				);
 			}
 		}
@@ -1108,7 +1120,7 @@
 			button,
 			a {
 				mask-image: radial-gradient(
-					circle at calc(100% - 0.75em - 0.375rem) calc(0.75em + 0.375rem),
+					circle at calc(100% - var(--_icon-inset)) var(--_icon-inset),
 					transparent calc(0.375rem + 3px),
 					black calc(0.375rem + 3.5px)
 				);
@@ -1381,6 +1393,8 @@
 			   embedded in a field (.input-icon-btn / .input-pill-btn) pin their
 			   own size and are unaffected. */
 			--_icon-size: calc(1em * var(--control-height-ratio, 3));
+			/* Gap between the button's edge and its glyph (50% icon → 25%). */
+			--_icon-inset: 25%;
 			height: var(--_icon-size);
 			width: var(--_icon-size);
 			aspect-ratio: 1 / 1;
@@ -1397,6 +1411,7 @@
 			&.dense {
 				--_icon-size: calc(1em * var(--control-height-ratio-dense, 2.5));
 				--_feedback-size: 60%;
+				--_icon-inset: 20%;
 				button,
 				a {
 					padding: 0;
