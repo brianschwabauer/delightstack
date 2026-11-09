@@ -129,6 +129,14 @@
 	const isLoading = $derived(!!externalLoading || inFlight);
 	const showSpinner = $derived(!!externalLoading || spinnerVisible);
 
+	// The ripple lives on the pressable element (a/button/label), not the <li>:
+	// the press scales that element, and a ripple outside it stayed full size
+	// while the highlight shrank — two different boxes on every tap.
+	const ripple_options = $derived({
+		zIndex: 1,
+		enabled: !context?.disabled && !disabled && !isLoading,
+	});
+
 	// Manual loading path: when the caller drives `loading` true -> false and has
 	// opted in with `loading_success`, play the same confirming checkmark. Runs in
 	// `$effect.pre` so `checkVisible` is set in the same flush `loading` clears in,
@@ -258,13 +266,9 @@
 		{id}
 		bind:this={element}
 		class:active={checked || active}
-		style:--level={context.level}
-		{@attach ripple({
-			zIndex: 1,
-			enabled: !context.disabled && !disabled && context.type !== 'text' && !isLoading,
-		})}>
+		style:--level={context.level}>
 		{#if context.type === 'checkbox'}
-			<label for="checkbox-{id}">
+			<label for="checkbox-{id}" {@attach ripple(ripple_options)}>
 				{#if children}{@render children()}{/if}
 				<div class="spacer"></div>
 				<input
@@ -285,7 +289,7 @@
 				</span>
 			</label>
 		{:else if context.type === 'toggle'}
-			<label for="toggle-{id}">
+			<label for="toggle-{id}" {@attach ripple(ripple_options)}>
 				{#if children}{@render children()}{/if}
 				<div class="spacer"></div>
 				<input
@@ -307,7 +311,7 @@
 				</span>
 			</label>
 		{:else if context.type === 'radio'}
-			<label for="radio-{id}">
+			<label for="radio-{id}" {@attach ripple(ripple_options)}>
 				{#if children}{@render children()}{/if}
 				<div class="spacer"></div>
 				<input
@@ -326,7 +330,11 @@
 			</label>
 		{:else if context.type === 'button'}
 			{#if href}
-				<a aria-disabled={context.disabled || disabled} {href} {target}>
+				<a
+					aria-disabled={context.disabled || disabled}
+					{href}
+					{target}
+					{@attach ripple(ripple_options)}>
 					{#if children}{@render children()}{/if}
 				</a>
 			{:else}
@@ -334,7 +342,8 @@
 					type="button"
 					disabled={context.disabled || disabled}
 					aria-busy={isLoading ? 'true' : null}
-					onclick={handleClick}>
+					onclick={handleClick}
+					{@attach ripple(ripple_options)}>
 					{#if showSpinner || checkVisible}
 						<div
 							class="loading-icon"
@@ -404,17 +413,6 @@
 		display: flex;
 		align-items: center;
 		--_radius: calc(var(--radius-lg) * 1.5);
-		:global(> .ripple) {
-			inset: 1px var(--border-inset) 1px
-				calc(var(--border-inset) + ((var(--level) - 1) * 1rem)) !important;
-			border-radius: calc(var(--_radius) - var(--border-inset)) !important;
-			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
-				border-radius: calc(
-					(var(--_radius) - var(--border-inset)) * var(--squircle-ratio, 2)
-				) !important;
-			}
-		}
 		&.active {
 			a,
 			button,
@@ -453,37 +451,19 @@
 			&::after {
 				content: none;
 			}
-			&::before {
-				top: var(--border-inset);
-			}
-			:global(> .ripple) {
-				top: var(--border-inset) !important;
-			}
 			a,
 			button,
 			label {
 				padding-top: calc(var(--border-inset, 0px) + 0.25rem);
-				&::before,
-				&::after {
-					top: var(--border-inset);
-				}
+				--_hl-top: var(--border-inset);
 			}
 		}
 		&:last-child {
-			&::before {
-				bottom: var(--border-inset);
-			}
-			:global(> .ripple) {
-				bottom: var(--border-inset) !important;
-			}
 			a,
 			button,
 			label {
 				padding-bottom: calc(var(--border-inset, 0px) + 0.25rem);
-				&::before,
-				&::after {
-					bottom: var(--border-inset);
-				}
+				--_hl-bottom: var(--border-inset);
 			}
 		}
 		&.dense {
@@ -723,9 +703,25 @@
 		background-color: transparent;
 		text-decoration: none;
 		box-shadow: none;
+		/* The highlight's box inside the row. The hover/active ::before, the
+		   focus ring ::after and the ripple all use it, and all live inside
+		   this element, so the press scales them as one shape. */
+		--_hl-top: 1px;
+		--_hl-bottom: 1px;
+		--_hl-left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
 		transition:
 			translate 200ms ease,
 			scale 200ms ease;
+		> :global(.ripple) {
+			inset: var(--_hl-top) var(--border-inset) var(--_hl-bottom) var(--_hl-left) !important;
+			border-radius: calc(var(--_radius) - var(--border-inset)) !important;
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(
+					(var(--_radius) - var(--border-inset)) * var(--squircle-ratio, 2)
+				) !important;
+			}
+		}
 
 		&:active:not(:disabled):not([aria-disabled='true']):not([aria-busy='true']) {
 			translate: 0px 2px;
@@ -749,10 +745,7 @@
 			content: '';
 			opacity: 0;
 			position: absolute;
-			top: 1px;
-			right: var(--border-inset);
-			bottom: 1px;
-			left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
+			inset: var(--_hl-top) var(--border-inset) var(--_hl-bottom) var(--_hl-left);
 			border-radius: calc(var(--_radius) - var(--border-inset));
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;
@@ -782,10 +775,7 @@
 			&::after {
 				content: '';
 				position: absolute;
-				top: 1px;
-				right: var(--border-inset);
-				bottom: 1px;
-				left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
+				inset: var(--_hl-top) var(--border-inset) var(--_hl-bottom) var(--_hl-left);
 				border-radius: calc(var(--_radius) - var(--border-inset));
 				@supports (corner-shape: squircle) {
 					corner-shape: squircle;
