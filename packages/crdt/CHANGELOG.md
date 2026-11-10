@@ -1,5 +1,12 @@
 # @delightstack/crdt
 
+## 0.4.3
+
+### Patch Changes
+
+- Updated dependencies [3112675]
+  - @delightstack/utilities@1.3.0
+
 ## 0.4.2
 
 ### Patch Changes
