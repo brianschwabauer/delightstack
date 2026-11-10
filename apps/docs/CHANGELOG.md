@@ -1,5 +1,14 @@
 # @delightstack/docs
 
+## 0.0.34
+
+### Patch Changes
+
+- Updated dependencies [b6db3c7]
+- Updated dependencies [b6db3c7]
+  - @delightstack/components@2.1.1
+  - @delightstack/styles@1.3.1
+
 ## 0.0.33
 
 ### Patch Changes
