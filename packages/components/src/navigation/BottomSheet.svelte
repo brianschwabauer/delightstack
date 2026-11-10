@@ -19,7 +19,8 @@
 		/**
 		 * Snap heights the sheet settles to. Each value is a fraction of the
 		 * viewport height (`<= 1`) or an absolute pixel height (`> 1`). They're
-		 * sorted ascending internally, and clamped to the content height so a
+		 * sorted ascending by the height they resolve to, so pixels and fractions
+		 * can be mixed in any order, and clamped to the content height so a
 		 * short sheet never opens taller than its content.
 		 */
 		snap_points = [0.5, 1] as SnapPoint[],
@@ -153,7 +154,12 @@
 	// --- Derived geometry ---
 	/** Resolve a snap value: <= 1 is a viewport fraction, > 1 is absolute pixels. */
 	const resolve = (v: number) => (v <= 1 ? v * viewport_h : v);
-	const sorted_snaps = $derived([...snap_points].sort((a, b) => a - b));
+	/**
+	 * Ordered by the height each value resolves to, not by the raw value: a
+	 * 359px peek beside a 0.9 fraction sorted the fraction first, so the sheet
+	 * opened at 90% and could never be pulled from the peek.
+	 */
+	const sorted_snaps = $derived([...snap_points].sort((a, b) => resolve(a) - resolve(b)));
 	/**
 	 * Height of the highest snap. The panel is capped at it (`--top-snap`), so
 	 * when the sheet is fully open its scroll area ends at the bottom of the

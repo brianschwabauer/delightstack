@@ -212,7 +212,12 @@
 	*::after {
 		animation-duration: 0.01ms !important;
 		animation-iteration-count: 1 !important;
-		transition-duration: 0.01ms !important;
+		/* 0s, not 0.01ms: every element defaults to `transition-property: all`,
+		   so any non-zero duration turned each style change on each element into
+		   a one-frame transition, and a layout read right after a change returned
+		   the old size. A zero duration is no transition at all. */
+		transition-duration: 0s !important;
+		transition-delay: 0s !important;
 		scroll-behavior: auto !important;
 	}
 }
