@@ -1,5 +1,18 @@
 # @delightstack/example-server
 
+## 0.0.27
+
+### Patch Changes
+
+- Updated dependencies [3112675]
+  - @delightstack/utilities@1.3.0
+  - @delightstack/ai@1.1.15
+  - @delightstack/auth@1.4.2
+  - @delightstack/database@3.0.2
+  - @delightstack/images@1.1.15
+  - @delightstack/presence@2.0.4
+  - @delightstack/websocket@2.2.3
+
 ## 0.0.26
 
 ### Patch Changes

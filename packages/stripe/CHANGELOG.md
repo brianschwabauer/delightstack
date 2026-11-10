@@ -1,5 +1,12 @@
 # @delightstack/stripe
 
+## 1.1.5
+
+### Patch Changes
+
+- Updated dependencies [3112675]
+  - @delightstack/utilities@1.3.0
+
 ## 1.1.4
 
 ### Patch Changes
