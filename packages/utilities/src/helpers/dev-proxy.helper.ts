@@ -11,21 +11,29 @@ interface DevHandleOptions {
 	bindings?: string[];
 	/**
 	 * Replace the listed bindings even when `getPlatformProxy()` already
-	 * provides them. Required when the DO classes live in a SEPARATE worker
-	 * (cross-script `script_name` bindings): newer wrangler exposes those
-	 * through the dev registry as stubs that support `fetch()` but throw
+	 * provides them. On by default. This bridge exists for DO classes that live
+	 * in a SEPARATE worker (cross-script `script_name` bindings), and whenever
+	 * that worker is running, wrangler's dev registry hands `getPlatformProxy()`
+	 * its own stubs for them. Those stubs are broken here: older wrangler throws
 	 * "Durable Object RPC is not yet supported between multiple dev sessions"
-	 * on any RPC method call. Leave false (the default) when the DOs live in
-	 * the same worker config — there platformProxy's stubs have working RPC
-	 * and must not be replaced.
-	 * @default false
+	 * on any RPC call, and newer miniflare can't deserialize a *thrown* error
+	 * from an async DO method. It fails `assert(typeHeader === "Promise")`
+	 * instead of rethrowing, so every DelightError (wrong password, not found,
+	 * rate limited) surfaces as that assertion. With the old `false` default
+	 * the bridge silently did nothing whenever the registry resolved the
+	 * bindings.
+	 *
+	 * Set false only to keep a platform-proxy binding this bridge can't serve.
+	 * @default true
 	 */
 	override?: boolean;
 }
 
 /**
  * SvelteKit handle that patches `event.platform.env` with dev proxy namespaces
- * for Durable Object bindings that aren't available via `getPlatformProxy()`.
+ * that reach Durable Objects in a separate wrangler dev worker over HTTP (served
+ * there by `createDevRpcHandler`). It replaces the listed bindings even when
+ * `getPlatformProxy()` supplies them; see `override` for why.
  *
  * Place this **first** in your `sequence()` so downstream handles see the proxied bindings.
  *
@@ -44,7 +52,7 @@ interface DevHandleOptions {
 export function createDevHandle(options?: DevHandleOptions) {
 	const url = options?.url ?? 'http://localhost:8787';
 	const binding_names = options?.bindings ?? ['AUTH', 'DB', 'WS', 'RATE_LIMITER'];
-	const override = options?.override ?? false;
+	const override = options?.override ?? true;
 
 	// Generic over the event so the returned function is assignable to
 	// SvelteKit's `Handle` type (a concrete `resolve: (event: unknown) => …`
@@ -68,9 +76,9 @@ export function createDevHandle(options?: DevHandleOptions) {
 		if (!platform.env) platform.env = {};
 		const env = platform.env as Record<string, unknown>;
 
-		// Patch DO bindings with proxy namespaces. Without `override`, only
-		// missing bindings are filled; with it, present-but-RPC-broken
-		// cross-session stubs are replaced too.
+		// Patch DO bindings with proxy namespaces. With `override` (the
+		// default) the dev registry's RPC-broken cross-session stubs are
+		// replaced too; without it only missing bindings are filled.
 		for (const name of binding_names) {
 			if (override || !env[name]) {
 				env[name] = createProxyNamespace(url, name);
