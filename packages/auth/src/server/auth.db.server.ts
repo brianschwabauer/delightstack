@@ -3401,8 +3401,11 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	/** Revokes the session(s) with the given id(s) */
 	revokeSession(session_ids: string | string[]) {
 		const ids = Array.isArray(session_ids) ? session_ids : [session_ids];
+		// A session that's already gone is already revoked. Its row disappears when it's
+		// revoked from another device or by a password change while the browser's jwt is
+		// still valid, so signing out with that jwt must not fail on the missing row.
 		ids.forEach((session_id) => {
-			this.sql.delete('user_session', session_id);
+			this.sql.run((sql) => sql`DELETE FROM user_session WHERE id = ${session_id}`);
 		});
 	}
 
