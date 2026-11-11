@@ -1,6 +1,6 @@
 {
 	"name": "@delightstack/mcp",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"type": "module",
 	"license": "MIT",
 	"description": "A Model Context Protocol server for Cloudflare Workers — Streamable HTTP transport, a validated tool registry, and an OAuth 2.1 provider with PKCE and dynamic client registration.",

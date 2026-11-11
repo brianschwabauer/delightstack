@@ -1,5 +1,13 @@
 # @delightstack/editor
 
+## 2.0.2
+
+### Patch Changes
+
+- Updated dependencies [8a84565]
+  - @delightstack/utilities@1.3.1
+  - @delightstack/components@2.1.3
+
 ## 2.0.1
 
 ### Patch Changes
