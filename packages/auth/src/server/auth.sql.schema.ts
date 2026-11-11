@@ -48,10 +48,11 @@ export type AuthDatabaseSchema = {
 	 * Only 'auth' sessions are used for regular sign ins.
 	 * 'Password reset' sessions are used to reset the user's password, and 'email verification' sessions are used to verify the user's email address.
 	 * 'email_signin' sessions are used to sign in with an email link.
+	 * 'email_add' sessions hold an email address being added to a signed-in account until its code comes back.
 	 */
 	user_session: {
 		id: string;
-		type: 'auth' | 'password_reset' | 'email_verification' | 'email_signin';
+		type: 'auth' | 'password_reset' | 'email_verification' | 'email_signin' | 'email_add';
 		user_id: string;
 		user_auth_id: string;
 		jwt: string;
@@ -418,7 +419,7 @@ export const AUTH_DATABASE_UPGRADES = [
 			user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
 			user_auth_id TEXT REFERENCES user_auth(id) ON DELETE CASCADE,
 			jwt TEXT NOT NULL,
-			type TEXT NOT NULL, -- 'auth' | 'password_reset' | 'email_verification' | 'email_signin'
+			type TEXT NOT NULL, -- 'auth' | 'password_reset' | 'email_verification' | 'email_signin' | 'email_add'
 			json TEXT, -- any extra data that needs to be stored with the session (e.g. user agent, ip address, etc.)
 			expires_at INTEGER,
 			created_at INTEGER NOT NULL, -- the timestamp when the user's auth was checked (e.g. when the user signed in)

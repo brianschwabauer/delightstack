@@ -347,15 +347,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		}
 
 		// Get the user's auth details
-		const [user_auth] = this.sql.list('user_auth', {
-			limit: 1,
-			where: {
-				and: [
-					{ key: 'email', is: '=', value: email.trim().toLowerCase() },
-					{ key: 'oauth_token_id', is: '=', value: null },
-				],
-			},
-		});
+		const user_auth = this.findEmailSignIn(email);
 		if (!user_auth?.password_hash) {
 			// Always run Argon2 against a dummy hash to prevent timing-based email enumeration
 			await argon2Verify({ hash: await getDummyHash(), password }).catch(() => {});
@@ -502,15 +494,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			new DelightError({ message: 'Incorrect or expired sign-in code', status: 401 });
 
 		// Find the email sign-in method for this email
-		const [user_auth] = this.sql.list('user_auth', {
-			limit: 1,
-			where: {
-				and: [
-					{ key: 'email', is: '=', value: email },
-					{ key: 'oauth_token_id', is: '=', value: null },
-				],
-			},
-		});
+		const user_auth = this.findEmailSignIn(email);
 		if (!user_auth) throw invalidCode();
 
 		// Only the most recently issued code is valid — older pending codes are ignored
@@ -957,6 +941,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		let type: AuthOperationResult['type'] | undefined;
 		let user_id: string | undefined;
 		let user_auth: AuthDatabaseSchema['user_auth'] | undefined;
+		/** An unconfirmed email sign-up this provider proved the owner of (see below) */
+		let claimed_user_auth_id: string | undefined;
 
 		// Check if the oauth account has been attached in the past
 		const [existing_token] = this.sql.list('oauth_token', {
@@ -1065,6 +1051,28 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				}
 				type = 'new-signin-method';
 			}
+
+			// A sign-up that never confirmed its email, and nothing else on the account is
+			// confirmed either: the provider has now proven who owns the address, so this is
+			// their account rather than a reason to make a second one. Whatever credentials
+			// it carries were never proven, and anyone could have set them (registering
+			// someone else's address first, then waiting), so they are wiped in the
+			// transaction below: the password, any unconfirmed passkey, every session.
+			if (!user_id) {
+				const unconfirmed = this.findEmailSignIn(email);
+				if (
+					unconfirmed &&
+					!unconfirmed.verified_at &&
+					!this.hasVerifiedSignIn(unconfirmed.user_id)
+				) {
+					const user = this.sql.get('user', unconfirmed.user_id);
+					if (!user.deleted_at) {
+						user_id = unconfirmed.user_id;
+						claimed_user_auth_id = unconfirmed.id;
+						type = 'new-signin-method';
+					}
+				}
+			}
 		}
 
 		let org_id: string | undefined;
@@ -1156,6 +1164,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 
 		// Save the user data in the database
 		this.sql.transaction(() => {
+			if (claimed_user_auth_id && user_id)
+				this.wipeUnprovenSignIns(user_id, claimed_user_auth_id);
 			if (!existing_token) {
 				this.sql.insert('oauth_token', oauth_token_id, {
 					json: JSON.stringify({ payload: oauth_token.payload }),
@@ -1302,11 +1312,25 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		};
 	}
 
-	/** Removes the sign in method & associated sessions/tokens for the given sign in method id */
-	revokeSignInMethod(user_auth_id: string) {
-		const user_auth = this.sql
-			.setError(`Could not find sign in method with id ${user_auth_id}`, 404)
-			.get('user_auth', user_auth_id);
+	/**
+	 * Removes the sign in method & associated sessions/tokens for the given sign in method id.
+	 * Pass `owner_user_id` whenever the id came from a request: a method that belongs to
+	 * someone else answers 404, exactly like one that doesn't exist.
+	 */
+	revokeSignInMethod(user_auth_id: string, owner_user_id?: string) {
+		const [user_auth] = this.sql.list('user_auth', {
+			limit: 1,
+			where: { key: 'id', is: '=', value: user_auth_id },
+		});
+		if (
+			!user_auth ||
+			(owner_user_id !== undefined && user_auth.user_id !== owner_user_id)
+		) {
+			throw new DelightError({
+				message: `Could not find sign in method with id ${user_auth_id}`,
+				status: 404,
+			});
+		}
 		const user_id = user_auth.user_id;
 		const user = this.sql
 			.setError(`Could not find user with id ${user_id}`, 404)
@@ -1372,6 +1396,14 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			}
 			if (passkey) {
 				this.sql.delete('user_passkey', passkey.id);
+			}
+			// Anything signed in with it is signed out: a removed method grants nothing
+			for (const session of this.sql.list('user_session', {
+				limit: 1000,
+				select: ['id'],
+				where: { key: 'user_auth_id', is: '=', value: user_auth_id },
+			})) {
+				this.sql.delete('user_session', session.id);
 			}
 			this.sql.delete('user_auth', user_auth_id);
 		});
@@ -1862,6 +1894,230 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			where: { key: 'user_id', is: '=', value: user_id },
 		});
 		return (auths.find((auth) => auth.verified_at) || auths[0])?.email;
+	}
+
+	/**
+	 * The email sign-in method (password or one-time code) for an address. A passkey's
+	 * sign-in row carries the account's email too, and with a `limit: 1` lookup by email
+	 * a password sign-in could land on the passkey's row and fail; OAuth links are
+	 * excluded the same way. A verified row wins over an unverified one.
+	 */
+	private findEmailSignIn(raw_email: string) {
+		const email = raw_email.trim().toLowerCase();
+		if (!email) return undefined;
+		const rows = this.sql.list('user_auth', {
+			limit: 20,
+			where: {
+				and: [
+					{ key: 'email', is: '=', value: email },
+					{ key: 'oauth_token_id', is: '=', value: null },
+				],
+			},
+		});
+		const methods = rows.filter((row) => !this.getPasskeyByAuthId(row.id));
+		return methods.find((row) => row.verified_at) ?? methods[0];
+	}
+
+	/**
+	 * Starts adding another email address as a sign-in method for a signed-in user. Nothing
+	 * is written to `user_auth` yet: the address is held on a pending 'email_add' session
+	 * with a one-time code, and only becomes a sign-in method when the code comes back
+	 * (`confirmEmailSignInMethod`). An address someone hasn't proven they receive mail at
+	 * can't block anyone else from signing up with it, and can't be signed in with.
+	 * Pass `password` to give the new address a password from the start; it's hashed
+	 * now and lands on the method when it's confirmed. Without one, the address signs
+	 * in with a one-time code until a password is set.
+	 * Returns the code to email to the new address.
+	 */
+	async addEmailSignInMethod(
+		user_id: string,
+		raw_email: string,
+		meta: UserSessionMeta,
+		password?: string,
+	) {
+		const email = raw_email.trim().toLowerCase();
+		if (password) await this.checkPasswordStrength(password);
+		const user = this.sql.setError(`Could not find user`).get('user', user_id);
+		if (user.deleted_at) {
+			throw new DelightError({
+				message: 'This account has been deleted. Please contact support for help.',
+				status: 401,
+			});
+		}
+		const is_allowed = this.rateLimit([meta.ip_address || '', 'add_email_signin'], {
+			max_tokens: 5,
+			refill_every_seconds: 60,
+		});
+		if (!is_allowed) {
+			throw new DelightError({
+				message: 'Too many requests. Please try again in a minute',
+				status: 429,
+			});
+		}
+		const own = this.findEmailSignIn(email);
+		if (own?.user_id === user_id) {
+			throw new DelightError({
+				message: `${email} is already on your account`,
+				status: 400,
+				code: 'email_already_yours',
+			});
+		}
+		this.checkEmailAvailability({ email, ip_address: meta.ip_address });
+
+		// Any earlier pending address is replaced: one confirmation in flight at a time
+		this.clearPendingEmailAdds(user_id);
+		const [anchor] = this.sql.list('user_auth', {
+			limit: 1,
+			select: ['id'],
+			where: { key: 'user_id', is: '=', value: user_id },
+		});
+		if (!anchor) throw new DelightError({ message: 'Could not find user', status: 404 });
+
+		const now = Date.now();
+		const id = generateID();
+		const code = generateEmailCode();
+		this.sql.insert('user_session', id, {
+			type: 'email_add',
+			user_id,
+			user_auth_id: anchor.id,
+			jwt: '',
+			expires_at: now + 1000 * 60 * 60,
+			json: JSON.stringify({
+				email,
+				meta: meta || {},
+				...(password ? { password_hash: await this.hashPassword(password) } : {}),
+			}),
+			code_hash: await hashEmailCode(id, code),
+			code_attempts: 0,
+		});
+		return { email, code };
+	}
+
+	/**
+	 * Finishes `addEmailSignInMethod`: checks the code sent to the new address and adds it
+	 * as a verified email sign-in method (sign in with a one-time code, or set a password
+	 * after signing in with it). The caller's session is left alone.
+	 */
+	async confirmEmailSignInMethod(
+		user_id: string,
+		raw_code: string,
+		meta: UserSessionMeta,
+	) {
+		const code = (raw_code || '').trim().toLowerCase();
+		const is_allowed = this.rateLimit([meta.ip_address || '', 'email_code_verify'], {
+			max_tokens: 5,
+			refill_every_seconds: 10,
+		});
+		if (!is_allowed) {
+			throw new DelightError({
+				message: 'Too many failed attempts. Please try again later',
+				status: 429,
+			});
+		}
+		const invalidCode = () =>
+			new DelightError({ message: 'Incorrect or expired code', status: 400 });
+		if (!code) throw invalidCode();
+
+		const pending = this.sql
+			.list('user_session', {
+				where: {
+					and: [
+						{ key: 'user_id', is: '=', value: user_id },
+						{ key: 'type', is: '=', value: 'email_add' },
+					],
+				},
+			})
+			.filter((s) => s.code_hash && (s.expires_at ?? 0) > Date.now())
+			.sort((a, b) => b.created_at - a.created_at)[0];
+		if (!pending) throw invalidCode();
+
+		const attempts = (pending.code_attempts ?? 0) + 1;
+		this.sql.update('user_session', pending.id, { code_attempts: attempts });
+		if (attempts > EMAIL_CODE_MAX_ATTEMPTS) throw invalidCode();
+		if ((await hashEmailCode(pending.id, code)) !== pending.code_hash)
+			throw invalidCode();
+
+		const { email, password_hash } = JSON.parse(pending.json || '{}') as {
+			email?: string;
+			password_hash?: string;
+		};
+		if (!email) throw invalidCode();
+		// Someone may have signed up with it while the code was in flight
+		this.checkEmailAvailability({ email, ip_address: meta.ip_address });
+
+		const user_auth_id = generateID();
+		this.sql.transaction(() => {
+			this.sql.insert('user_auth', user_auth_id, {
+				user_id,
+				email,
+				password_hash,
+				verified_at: Date.now(),
+			});
+			this.clearPendingEmailAdds(user_id);
+		});
+		return this.getSignInMethod(user_auth_id);
+	}
+
+	/** Whether the user has any confirmed sign-in method. */
+	private hasVerifiedSignIn(user_id: string): boolean {
+		return (
+			this.sql.list('user_auth', {
+				limit: 1,
+				select: ['id'],
+				where: {
+					and: [
+						{ key: 'user_id', is: '=', value: user_id },
+						{ key: 'verified_at', is: '!=', value: null },
+					],
+				},
+			}).length > 0
+		);
+	}
+
+	/**
+	 * For an account a provider just proved the owner of, when none of its sign-ins was
+	 * ever confirmed: keep the email row (now confirmed, no password), drop every other
+	 * unconfirmed sign-in method and every session. Call inside a transaction.
+	 */
+	private wipeUnprovenSignIns(user_id: string, keep_user_auth_id: string) {
+		for (const session of this.sql.list('user_session', {
+			limit: 1000,
+			select: ['id'],
+			where: { key: 'user_id', is: '=', value: user_id },
+		})) {
+			this.sql.delete('user_session', session.id);
+		}
+		for (const method of this.sql.list('user_auth', {
+			limit: 100,
+			select: ['id', 'verified_at'],
+			where: { key: 'user_id', is: '=', value: user_id },
+		})) {
+			if (method.id === keep_user_auth_id || method.verified_at) continue;
+			const passkey = this.getPasskeyByAuthId(method.id);
+			if (passkey) this.sql.delete('user_passkey', passkey.id);
+			this.sql.delete('user_auth', method.id);
+		}
+		const now = Date.now();
+		this.sql.run(
+			(sql) =>
+				sql`UPDATE user_auth SET password_hash = NULL, verified_at = ${now}, updated_at = ${now} WHERE id = ${keep_user_auth_id}`,
+		);
+	}
+
+	/** Drops a user's pending (unconfirmed) email additions. */
+	private clearPendingEmailAdds(user_id: string) {
+		for (const session of this.sql.list('user_session', {
+			limit: 100,
+			select: ['id'],
+			where: {
+				and: [
+					{ key: 'user_id', is: '=', value: user_id },
+					{ key: 'type', is: '=', value: 'email_add' },
+				],
+			},
+		})) {
+			this.sql.delete('user_session', session.id);
+		}
 	}
 
 	/** How long a WebAuthn challenge stays valid before the ceremony must be restarted */
@@ -2495,7 +2751,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		email: string,
 		meta: UserSessionMeta,
 		options?: { code?: boolean },
-	): Promise<AuthOperationResult<'email_signin'> & { code?: string }> {
+	): Promise<(AuthOperationResult<'email_signin'> & { code?: string }) | null> {
 		if (!email) {
 			throw new DelightError({ message: 'Email is required', status: 400 });
 		}
@@ -2512,16 +2768,11 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			});
 		}
 
-		// Get the user's auth details
-		const [user_auth] = this.sql.list('user_auth', {
-			limit: 1,
-			where: {
-				and: [
-					{ key: 'email', is: '=', value: email.trim().toLowerCase() },
-					{ key: 'oauth_token_id', is: '=', value: null },
-				],
-			},
-		});
+		// Get the user's auth details. An address with no account answers null rather
+		// than throwing, so the route can answer the same either way and a sign-in form
+		// can't be used to find out who has an account.
+		const user_auth = this.findEmailSignIn(email);
+		if (!user_auth) return null;
 		const user = this.sql
 			.setError(`Couldn't find user with given email`)
 			.get('user', user_auth.user_id);
@@ -2864,15 +3115,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 
 		const formatted_email = email.trim().toLowerCase();
 		const now = Date.now();
-		const [user_auth] = this.sql.list('user_auth', {
-			limit: 1,
-			where: {
-				and: [
-					{ key: 'email', is: '=', value: formatted_email },
-					{ key: 'password_hash', is: '!=', value: null },
-				],
-			},
-		});
+		// Any email sign-in, with a password or not: a reset is also how an address
+		// that signs in by code (or was added later) gets its first password
+		const user_auth = this.findEmailSignIn(formatted_email);
 		if (!user_auth) {
 			throw new DelightError({
 				message: `Account with provided email doesn't exist or is using an oauth vendor to sign in`,
@@ -4340,7 +4585,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		const stale_auth_cutoff = now - max_age_seconds * 1000;
 		this.sql.run(
 			(sql) => sql`DELETE FROM user_session
-				WHERE (type IN ('email_verification', 'password_reset', 'email_signin') AND expires_at < ${now})
+				WHERE (type IN ('email_verification', 'password_reset', 'email_signin', 'email_add') AND expires_at < ${now})
 				OR (type = 'auth' AND expires_at < ${stale_auth_cutoff})`,
 		);
 		this.sql.run((sql) => sql`DELETE FROM webauthn_challenge WHERE expires_at < ${now}`);

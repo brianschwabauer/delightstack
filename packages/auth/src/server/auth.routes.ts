@@ -277,7 +277,8 @@ const signInEmailMagic: AuthRouteHandler = (ctx) =>
 			code: send_code,
 		});
 
-		if (ctx.config.email?.sendEmail) {
+		// No account for that address: answer exactly as if the email went out
+		if (result && ctx.config.email?.sendEmail) {
 			const base_url = ctx.config.email.base_url || ctx.event.url.origin;
 			const link = send_link
 				? `${base_url}${ctx.config.base_path}/signin/email/verify?token=${result.jwt}`
@@ -953,8 +954,57 @@ const userSignInMethodRevoke: AuthRouteHandler = (ctx) =>
 		const id = ctx.event.params.id;
 		if (!id)
 			throw new DelightError({ message: 'Sign-in method ID is required', status: 400 });
-		await ctx.auth.revokeSignInMethod(id);
+		// Removing the method this session signed in with would sign it out mid-request
+		if (id === ctx.locals.session!.sub) {
+			throw new DelightError({
+				message: `You're signed in with this one. Sign in another way to remove it.`,
+				status: 400,
+				code: 'signin_method_in_use',
+			});
+		}
+		// Only the caller's own methods: someone else's id answers 404
+		await ctx.auth.revokeSignInMethod(id, ctx.locals.session!.uid);
 		return noContent();
+	});
+
+const userSignInMethodAddEmail: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		requireAuth(ctx.locals);
+		const body = parseSchema(
+			z.object({ email: z.email(), password: z.string().min(1).max(256).optional() }),
+			await ctx.event.request.json(),
+		);
+		const result = await ctx.auth.addEmailSignInMethod(
+			ctx.locals.session!.uid,
+			body.email,
+			ctx.meta,
+			body.password,
+		);
+		if (ctx.config.email?.sendEmail) {
+			await ctx.config.email.sendEmail({
+				to: result.email,
+				code: result.code,
+				subject: 'Confirm your email address',
+				...emailBodies('add this email to your account', undefined, result.code),
+				type: 'verification',
+			});
+		}
+		return noContent();
+	});
+
+const userSignInMethodConfirmEmail: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		requireAuth(ctx.locals);
+		const body = parseSchema(
+			z.object({ code: z.string().min(1).max(32) }),
+			await ctx.event.request.json(),
+		);
+		const method = await ctx.auth.confirmEmailSignInMethod(
+			ctx.locals.session!.uid,
+			body.code,
+			ctx.meta,
+		);
+		return json(method);
 	});
 
 // ============================================
@@ -1670,6 +1720,8 @@ const ROUTES: RouteDefinition[] = [
 	defineRoute('PATCH', '/user', userUpdate),
 	defineRoute('DELETE', '/user', userDelete),
 	defineRoute('GET', '/user/signin-method', userSignInMethods),
+	defineRoute('POST', '/user/signin-method/email', userSignInMethodAddEmail),
+	defineRoute('POST', '/user/signin-method/email/confirm', userSignInMethodConfirmEmail),
 	defineRoute('DELETE', '/user/signin-method/:id', userSignInMethodRevoke),
 
 	// Preferences

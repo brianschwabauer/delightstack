@@ -834,3 +834,110 @@ describe('GET /signin/:vendor/callback', () => {
 		expect(applySession).toHaveBeenCalledWith('session.jwt.value', { uid: 'user_1' });
 	});
 });
+
+describe('sign-in methods: removing, and adding an email', () => {
+	it("passes the caller's uid so someone else's method can't be removed", async () => {
+		const revokeSignInMethod = vi.fn(async () => {});
+		const { response } = await callRoute('DELETE', '/user/signin-method/ua_other', {
+			auth: { revokeSignInMethod },
+		});
+		expect(response.status).toBe(204);
+		expect(revokeSignInMethod).toHaveBeenCalledWith('ua_other', 'user_1');
+	});
+
+	it('refuses to remove the method the session signed in with', async () => {
+		const revokeSignInMethod = vi.fn(async () => {});
+		const { response, body } = await callRoute('DELETE', '/user/signin-method/ua_1', {
+			auth: { revokeSignInMethod },
+		});
+		expect(response.status).toBe(400);
+		expect(String(body?.message)).toMatch(/signed in with this one/);
+		expect(revokeSignInMethod).not.toHaveBeenCalled();
+	});
+
+	it('passes an optional password through to the new address', async () => {
+		const addEmailSignInMethod = vi.fn(async () => ({
+			email: 'p@example.com',
+			code: 'bcdfgh',
+		}));
+		const { response } = await callRoute('POST', '/user/signin-method/email', {
+			body: { email: 'p@example.com', password: 'a-long-password-42' },
+			auth: { addEmailSignInMethod },
+		});
+		expect(response.status).toBe(204);
+		expect(addEmailSignInMethod).toHaveBeenCalledWith(
+			'user_1',
+			'p@example.com',
+			{},
+			'a-long-password-42',
+		);
+	});
+
+	it('emails a code to the address being added, and never a link', async () => {
+		const match = matchRoute('POST', '/user/signin-method/email')!;
+		const ctx = makeCtx({
+			body: { email: 'second@example.com' },
+			auth: {
+				addEmailSignInMethod: vi.fn(async () => ({
+					email: 'second@example.com',
+					code: 'bcdfgh',
+				})),
+			},
+		});
+		const sendEmail = vi.fn(async () => {});
+		(ctx.config as unknown as { email: unknown }).email = { sendEmail, code: true };
+		const response = await match.handler(ctx);
+		expect(response.status).toBe(204);
+		expect(sendEmail).toHaveBeenCalledWith(
+			expect.objectContaining({
+				to: 'second@example.com',
+				code: 'bcdfgh',
+				type: 'verification',
+			}),
+		);
+		expect((sendEmail.mock.calls[0] as unknown[])[0]).not.toHaveProperty(
+			'link',
+			expect.any(String),
+		);
+	});
+
+	it('confirms the added email for the signed-in user only', async () => {
+		const confirmEmailSignInMethod = vi.fn(async () => ({
+			id: 'ua_2',
+			email: 'b@x.com',
+		}));
+		const { response, body } = await callRoute(
+			'POST',
+			'/user/signin-method/email/confirm',
+			{
+				body: { code: 'bcdfgh' },
+				auth: { confirmEmailSignInMethod },
+			},
+		);
+		expect(response.status).toBe(200);
+		expect(body).toMatchObject({ id: 'ua_2' });
+		expect(confirmEmailSignInMethod).toHaveBeenCalledWith('user_1', 'bcdfgh', {});
+	});
+
+	it('requires a session to add an email', async () => {
+		const { response } = await callRoute('POST', '/user/signin-method/email', {
+			uid: null,
+			body: { email: 'x@example.com' },
+		});
+		expect(response.status).toBe(401);
+	});
+
+	it('answers a sign-in code request for an unknown address like any other', async () => {
+		const match = matchRoute('POST', '/signin/email/magic')!;
+		const ctx = makeCtx({
+			uid: null,
+			body: { email: 'nobody@example.com' },
+			auth: { createEmailSignInToken: vi.fn(async () => null) },
+		});
+		const sendEmail = vi.fn(async () => {});
+		(ctx.config as unknown as { email: unknown }).email = { sendEmail, code: true };
+		const response = await match.handler(ctx);
+		expect(response.status).toBe(204);
+		expect(sendEmail).not.toHaveBeenCalled();
+	});
+});

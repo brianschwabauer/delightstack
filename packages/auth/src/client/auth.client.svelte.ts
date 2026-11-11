@@ -591,6 +591,22 @@ export class AuthClient<P extends string = string, E extends string = string> {
 		removeSignInMethod: async (method_id: string): Promise<void> => {
 			return this.delete(`/user/signin-method/${method_id}`);
 		},
+		/**
+		 * Start adding another email address as a sign-in method. A one-time code is
+		 * emailed to the new address; nothing changes until it comes back through
+		 * `confirmEmailSignInMethod`. Calling again replaces the pending address.
+		 * With `password`, the address signs in with that password once confirmed.
+		 */
+		addEmailSignInMethod: async (email: string, password?: string): Promise<void> => {
+			return this.post(
+				'/user/signin-method/email',
+				password ? { email, password } : { email },
+			);
+		},
+		/** Finish adding an email: the code sent to it. Returns the new sign-in method. */
+		confirmEmailSignInMethod: async (code: string): Promise<UserSignInMethod> => {
+			return this.post('/user/signin-method/email/confirm', { code });
+		},
 	} as const;
 
 	/** Create a new organization and switch to it. */
