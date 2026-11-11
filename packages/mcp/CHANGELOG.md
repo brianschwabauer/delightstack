@@ -1,5 +1,12 @@
 # @delightstack/mcp
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [0964acc]
+  - @delightstack/utilities@1.3.2
+
 ## 0.2.2
 
 ### Patch Changes

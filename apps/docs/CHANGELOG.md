@@ -1,5 +1,14 @@
 # @delightstack/docs
 
+## 0.0.38
+
+### Patch Changes
+
+- Updated dependencies [8fcb443]
+  - @delightstack/components@2.2.0
+  - @delightstack/editor@2.0.3
+  - @delightstack/presence@2.0.6
+
 ## 0.0.37
 
 ### Patch Changes

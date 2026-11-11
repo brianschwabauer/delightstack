@@ -1,6 +1,6 @@
 {
 	"name": "@delightstack/presence",
-	"version": "2.0.5",
+	"version": "2.0.6",
 	"type": "module",
 	"license": "MIT",
 	"description": "Real-time presence for Svelte 5 — online roster, live cursors, cursor chat, reactions, and field presence, layered on a swappable transport/identity.",

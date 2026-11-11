@@ -1,5 +1,16 @@
 # @delightstack/components
 
+## 2.2.0
+
+### Minor Changes
+
+- 8fcb443: ContextMenu actions take `shortcut`, `group` and `danger`. `shortcut` (e.g. `['⌘', 'D']`) shows the keys as quiet text on the item's trailing edge. `group` keeps related actions together, and a hairline is drawn wherever the group changes, so an action left out conditionally never leaves a stray divider. `danger` puts a destructive action like Delete in the error color. A menu can also ask for `dense` rows.
+
+### Patch Changes
+
+- Updated dependencies [0964acc]
+  - @delightstack/utilities@1.3.2
+
 ## 2.1.4
 
 ### Patch Changes
