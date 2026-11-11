@@ -187,7 +187,7 @@
 	import { quintOut } from 'svelte/easing';
 	import Progress from '../feedback/Progress.svelte';
 	import Pagination from '../navigation/Pagination.svelte';
-	import TableCellEditor from './TableCellEditor.svelte';
+	import type TableCellEditorComponent from './TableCellEditor.svelte';
 
 	const propId = $props.id();
 
@@ -1421,6 +1421,18 @@
 		n.delete(k);
 		return n;
 	}
+
+	// The cell editor (about a third of this component's code) loads only for
+	// an `editable` table, as soon as it mounts. A read-only table, the common
+	// case, never downloads it. Until it arrives an active cell just shows its
+	// value; it's there long before anyone can double-click.
+	let TableCellEditor = $state<typeof TableCellEditorComponent | null>(null);
+	$effect(() => {
+		if (!editable || TableCellEditor) return;
+		void import('./TableCellEditor.svelte').then((module) => {
+			TableCellEditor = module.default;
+		});
+	});
 
 	function resolveEditable(col: Column<T>, row: T): boolean {
 		if (!editable) return false;
@@ -3144,7 +3156,7 @@
 							</svg>
 						</span>
 					</button>
-				{:else if active}
+				{:else if active && TableCellEditor}
 					{#key activeKey}
 						<TableCellEditor
 							column={col}
