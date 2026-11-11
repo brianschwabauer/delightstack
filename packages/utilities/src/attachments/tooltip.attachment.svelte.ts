@@ -147,7 +147,10 @@ export function tooltip(tooltipMessage: string): Attachment<HTMLElement> {
 				transform: 'scale(.65)',
 				transition: TOOLTIP_TRANSITION,
 				'pointer-events': 'none',
-				'z-index': '100',
+				// Above popovers, modals and toasts (tokens.css --layer-tooltip): a tooltip
+				// on a control inside a popover, or on the button that opened it, must
+				// never sit behind the panel.
+				'z-index': 'var(--layer-tooltip, 700)',
 				'box-shadow': 'var(--shadow-2)',
 				'max-width': 'min(40ch, 90vw)',
 				'border-radius': '10px',
