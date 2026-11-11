@@ -382,7 +382,10 @@ export function createAuthHandle<Config extends AuthConfig>(
 				return getAuth();
 			},
 		};
-		Object.assign(event.locals, locals);
+		// defineProperties, not Object.assign: assign invokes the `auth` getter, which builds
+		// the auth server on every request — and on a prerenderable route, where the adapter's
+		// stand-in env throws on any binding access, that turns every page into a 500
+		Object.defineProperties(event.locals, Object.getOwnPropertyDescriptors(locals));
 
 		// 14. Check if URL matches auth routes
 		const base_path = config.base_path;
