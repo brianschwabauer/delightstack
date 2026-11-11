@@ -1,5 +1,12 @@
 # @delightstack/components
 
+## 2.1.4
+
+### Patch Changes
+
+- b4a1847: The package now declares `"sideEffects": ["**/*.css"]`, so bundlers can drop the components an app doesn't use. Without it, importing anything from `@delightstack/components` kept every module the barrel re-exports. In one SvelteKit app, every page, sign-in included, loaded a 353 KB chunk (105 KB gzip) holding about 45 components, plus their 302 KB of CSS. Components that app never renders (QR, Timeline, Confetti, Pagination and others) shipped anyway. Nothing to change in your code; components you use are bundled as before.
+- 1a72237: `Table` loads its cell editor only when the table is `editable`. The editor is about a third of the component's code (21 KB of the 55 KB the two ship together), and a read-only table used to download it anyway. An editable table imports it as soon as it mounts, and until it arrives an active cell shows its value. In practice it has loaded long before anyone double-clicks a cell. Nothing to change in your code.
+
 ## 2.1.3
 
 ### Patch Changes
