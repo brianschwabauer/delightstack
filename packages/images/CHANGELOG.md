@@ -1,5 +1,13 @@
 # @delightstack/images
 
+## 1.1.17
+
+### Patch Changes
+
+- Updated dependencies [0964acc]
+  - @delightstack/utilities@1.3.2
+  - @delightstack/database@3.0.4
+
 ## 1.1.16
 
 ### Patch Changes
