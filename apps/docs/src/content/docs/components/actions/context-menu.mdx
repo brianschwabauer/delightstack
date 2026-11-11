@@ -11,6 +11,7 @@ import ContextMenuLinksDemo from '../../../../components/demos/ContextMenuLinksD
 import ContextMenuActiveDemo from '../../../../components/demos/ContextMenuActiveDemo.svelte';
 import ContextMenuCustomDemo from '../../../../components/demos/ContextMenuCustomDemo.svelte';
 import ContextMenuPromiseDemo from '../../../../components/demos/ContextMenuPromiseDemo.svelte';
+import ContextMenuGroupsDemo from '../../../../components/demos/ContextMenuGroupsDemo.svelte';
 
 ## Import
 
@@ -170,6 +171,28 @@ ${'  '}</span>
 	<ContextMenuCustomDemo client:load />
 </ComponentPreview>
 
+### Groups, Shortcuts and Destructive Actions
+
+Give related actions the same `group` and a hairline separates each group from the next. The divider is drawn wherever the group changes, so you can leave actions out conditionally without stranding one. `shortcut` shows the keys that run the action elsewhere on the item's trailing edge (display only), and `danger` puts a destructive action in the error color. `dense` uses compact rows, which suit a long pointer menu.
+
+<ComponentPreview code={`<div {@attach contextMenu({
+${'  '}dense: true,
+${'  '}actions: [
+${'  '}${'  '}{ label: 'Cut', shortcut: ['⌘', 'X'], group: 'edit', onclick: cut },
+${'  '}${'  '}{ label: 'Copy', shortcut: ['⌘', 'C'], group: 'edit', onclick: copy },
+${'  '}${'  '}{ label: 'Duplicate', shortcut: ['⌘', 'D'], group: 'edit', onclick: duplicate },
+${'  '}${'  '}{ label: 'Bring to front', shortcut: ['⇧', ']'], group: 'arrange', onclick: toFront },
+${'  '}${'  '}{ label: 'Send to back', shortcut: ['⇧', '['], group: 'arrange', onclick: toBack },
+${'  '}${'  '}{ label: 'Delete', shortcut: ['⌫'], group: 'delete', danger: true, onclick: remove },
+${'  '}]
+})}>
+${'  '}Right-click for editing actions
+</div>
+
+<ContextMenu />`}>
+	<ContextMenuGroupsDemo client:load />
+</ComponentPreview>
+
 ### Promise-Aware Actions
 
 When an action's `onclick` returns a Promise, the clicked item shows a loading spinner while it is pending (after a short delay, so fast actions never flash one), and the menu stays open until the promise resolves.
@@ -228,7 +251,11 @@ interface ContextMenuOptions {
     disabled?: boolean;
     icon?: Component;
     snippet?: Snippet<[ContextMenuOptions & { el: HTMLElement }]>;
+    shortcut?: string[];
+    group?: string;
+    danger?: boolean;
   }>;
+  dense?: boolean;
 }
 ```
 
@@ -249,7 +276,11 @@ interface ContextMenuOptions {
     disabled?: boolean;
     icon?: Component;
     snippet?: Snippet<[ContextMenuOptions & { el: HTMLElement }]>;
+    shortcut?: string[];
+    group?: string;
+    danger?: boolean;
   }>;
+  dense?: boolean;
 }
 ```
 

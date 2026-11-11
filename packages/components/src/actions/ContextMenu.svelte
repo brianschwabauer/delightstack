@@ -31,7 +31,22 @@
 			icon?: Component<Record<string, unknown>>;
 			/** An optional snippet that will be used to render the content of the action (instead of using 'label') */
 			snippet?: Snippet<[ContextMenuOptions & { el: HTMLElement }]>;
+			/**
+			 * The keys that trigger this action elsewhere, shown on the item's trailing
+			 * edge (e.g. `['⌘', 'D']`). Display only; the menu doesn't bind them.
+			 */
+			shortcut?: string[];
+			/**
+			 * Actions that share a group sit together, and a hairline separates one group
+			 * from the next. A divider is drawn wherever the group changes between two
+			 * neighbouring actions, so leaving an action out never strands a divider.
+			 */
+			group?: string;
+			/** Render the action in the error color, for destructive actions like Delete */
+			danger?: boolean;
 		}>;
+		/** Use the compact list rows (for pointer menus with many actions) */
+		dense?: boolean;
 	}
 
 	/** The currently displayed context mneu */
@@ -155,8 +170,11 @@
 		x={contextMenuLocationX}
 		y={contextMenuLocationY}>
 		{#if renderedMenu?.actions?.length}
-			<List>
-				{#each renderedMenu.actions as action}
+			<List dense={renderedMenu.dense}>
+				{#each renderedMenu.actions as action, i}
+					{#if i > 0 && action.group !== renderedMenu.actions[i - 1]?.group}
+						<li class="separator" aria-hidden="true"></li>
+					{/if}
 					<ListItem
 						onclick={async (event) => {
 							if (action.onclick) await action.onclick(event as PointerEvent);
@@ -170,12 +188,16 @@
 							{@render action.snippet(renderedMenu)}
 						{:else}
 							{#if action.icon}
-								<span
-									style="display:inline-flex; align-items: center; padding-right: 0.5rem; font-size: 1.1rem;">
+								<span class="icon" class:danger={action.danger}>
 									<action.icon></action.icon>
 								</span>
 							{/if}
-							{action.label}
+							<span class="label" class:danger={action.danger}>{action.label}</span>
+							{#if action.shortcut?.length}
+								<span class="shortcut">
+									{#each action.shortcut as key}<kbd>{key}</kbd>{/each}
+								</span>
+							{/if}
 						{/if}
 					</ListItem>
 				{/each}
@@ -183,3 +205,40 @@
 		{/if}
 	</Popover>
 {/if}
+
+<style>
+	.icon {
+		display: inline-flex;
+		align-items: center;
+		padding-right: 0.5rem;
+		font-size: 1.1rem;
+	}
+	.label {
+		flex: 1;
+		min-width: 0;
+	}
+	.danger {
+		color: var(--color-error);
+	}
+	/* Shortcuts read like a native menu's: quiet text on the trailing edge, not keycaps */
+	.shortcut {
+		flex: none;
+		display: inline-flex;
+		gap: 0.125em;
+		padding-left: 2rem;
+		color: var(--color-text-muted);
+		font-size: 0.85em;
+		font-variant-numeric: tabular-nums;
+		kbd {
+			font: inherit;
+		}
+	}
+	/* One hairline between groups, inset to the item text */
+	.separator {
+		list-style: none;
+		height: 1px;
+		margin: 0.25rem 1rem;
+		padding: 0;
+		background: var(--color-border);
+	}
+</style>
