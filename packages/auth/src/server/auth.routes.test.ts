@@ -941,3 +941,34 @@ describe('sign-in methods: removing, and adding an email', () => {
 		expect(sendEmail).not.toHaveBeenCalled();
 	});
 });
+
+describe('OAuth sign-in: the provider prompt', () => {
+	const google = {
+		client_id: 'cid',
+		client_secret: 'secret',
+		authorization_url: 'https://accounts.example.com/auth',
+		access_token_url: 'https://accounts.example.com/token',
+		scopes: ['openid', 'email'],
+	};
+	async function start(query: string) {
+		const match = matchRoute('GET', '/signin/google')!;
+		const ctx = makeCtx({ params: { vendor: 'google' } });
+		(ctx.event as unknown as { url: URL }).url = new URL(
+			`https://app.example.com/api/auth/signin/google${query}`,
+		);
+		(ctx.config as unknown as { oauth: unknown }).oauth = { google };
+		const response = await match.handler(ctx);
+		return new URL(response.headers.get('location')!);
+	}
+
+	it('passes prompt=select_account through, so linking shows the chooser', async () => {
+		expect((await start('?prompt=select_account')).searchParams.get('prompt')).toBe(
+			'select_account',
+		);
+	});
+
+	it('ignores prompt values it does not know', async () => {
+		expect((await start('?prompt=evil')).searchParams.has('prompt')).toBe(false);
+		expect((await start('')).searchParams.has('prompt')).toBe(false);
+	});
+});

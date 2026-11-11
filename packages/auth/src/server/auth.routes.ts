@@ -411,6 +411,9 @@ const signUpEmail: AuthRouteHandler = (ctx) =>
 		return json({ jwt: result.jwt, decoded_jwt: result.decoded_jwt });
 	});
 
+/** The OpenID Connect `prompt` values the sign-in route passes through to the provider. */
+const OAUTH_PROMPTS = new Set(['select_account', 'consent', 'login']);
+
 const signInOauth: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		const vendor = ctx.event.params.vendor;
@@ -451,6 +454,11 @@ const signInOauth: AuthRouteHandler = (ctx) =>
 			scope: scopes.join(' '),
 			state,
 		});
+		// `?prompt=select_account` (or consent/login) is handed to the provider: linking
+		// "another" Google account needs the account chooser, or Google quietly picks the
+		// account the browser is already signed into, which is usually the linked one
+		const prompt = ctx.event.url.searchParams.get('prompt');
+		if (prompt && OAUTH_PROMPTS.has(prompt)) params.set('prompt', prompt);
 
 		return redirect(`${oauth_config.authorization_url}?${params}`);
 	});

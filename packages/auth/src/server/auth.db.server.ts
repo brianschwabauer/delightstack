@@ -957,6 +957,21 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 
 		// The user is attempting to sign in to an existing account
 		if (existing_token) {
+			// Linking an account that's already linked to this same user is a sign-in with
+			// it, not an error: the provider often hands back the account the browser is
+			// signed into, which is the one already there
+			const [linked] = data.connect_user_id
+				? this.sql.list('user_auth', {
+						limit: 1,
+						where: {
+							and: [
+								{ key: 'oauth_token_id', is: '=', value: existing_token.id },
+								{ key: 'user_id', is: '=', value: data.connect_user_id },
+							],
+						},
+					})
+				: [];
+			if (linked) data = { ...data, connect_user_id: undefined };
 			if (data.connect_user_id) {
 				throw new DelightError({
 					message: `Can't connect an oauth account that is already connected to another user`,
