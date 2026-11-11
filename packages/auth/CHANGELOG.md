@@ -1,5 +1,11 @@
 # @delightstack/auth
 
+## 1.5.3
+
+### Patch Changes
+
+- 26b17e9: Signing out no longer fails with "Expected exactly one result from SQL query" when the session row is already gone (revoked from another device, or by a password change, while the browser's JWT is still valid). `revokeSession` is now idempotent.
+
 ## 1.5.2
 
 ### Patch Changes
