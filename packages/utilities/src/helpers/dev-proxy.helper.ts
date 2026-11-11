@@ -80,6 +80,13 @@ export function createDevHandle(options?: DevHandleOptions) {
 		// default) the dev registry's RPC-broken cross-session stubs are
 		// replaced too; without it only missing bindings are filled.
 		for (const name of binding_names) {
+			// A prerenderable route gets a stand-in env whose bindings are getters
+			// that throw ("Cannot access platform.env.X in a prerenderable route" —
+			// adapter-cloudflare's prerender platform). Such a route never reaches a
+			// DO, and both reading the binding and assigning over a getter-only
+			// property would throw, so leave it alone.
+			const descriptor = Object.getOwnPropertyDescriptor(env, name);
+			if (descriptor?.get && !descriptor.set) continue;
 			if (override || !env[name]) {
 				env[name] = createProxyNamespace(url, name);
 			}
