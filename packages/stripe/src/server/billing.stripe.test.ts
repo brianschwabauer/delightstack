@@ -1,7 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type Stripe from 'stripe';
 import { DelightError } from '@delightstack/utilities';
-import { formatInvoice, resolveReturnUrl } from './billing.stripe.js';
+import {
+	formatInvoice,
+	getStripe,
+	resolveReturnUrl,
+	stripeApiOptions,
+} from './billing.stripe.js';
 import { defineBillingConfig } from './billing.config.js';
 
 function makeConfig(overrides?: Partial<Parameters<typeof defineBillingConfig>[0]>) {
@@ -124,5 +129,77 @@ describe('resolveReturnUrl', () => {
 				'https://app.test/done?session_id={CHECKOUT_SESSION_ID}',
 			),
 		).toBe('https://app.test/done?session_id={CHECKOUT_SESSION_ID}');
+	});
+});
+
+describe('stripe_api_url (fake Stripe server)', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	/** Stubs fetch with a fake Stripe that records every request URL */
+	function fakeStripe(): string[] {
+		const urls: string[] = [];
+		vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+			urls.push(input instanceof Request ? input.url : String(input));
+			return new Response(JSON.stringify({ id: 'cus_fake', object: 'customer' }), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' },
+			});
+		});
+		return urls;
+	}
+
+	it('sends API calls through fetch to the configured base URL', async () => {
+		const urls = fakeStripe();
+		const config = makeConfig({
+			secret_key: 'sk_test_fake_base',
+			stripe_api_url: 'http://localhost:12111',
+		});
+
+		const customer = await getStripe(config).customers.retrieve('cus_fake');
+
+		expect(customer.id).toBe('cus_fake');
+		expect(urls).toEqual(['http://localhost:12111/v1/customers/cus_fake']);
+	});
+
+	it('talks to api.stripe.com over https by default, through fetch', async () => {
+		const urls = fakeStripe();
+		const config = makeConfig({ secret_key: 'sk_test_default_base' });
+
+		await getStripe(config).customers.retrieve('cus_fake');
+
+		expect(urls).toEqual(['https://api.stripe.com/v1/customers/cus_fake']);
+	});
+
+	it('keeps one client per secret key and base URL', () => {
+		fakeStripe();
+		const real = makeConfig({ secret_key: 'sk_test_cache' });
+		const fake = makeConfig({
+			secret_key: 'sk_test_cache',
+			stripe_api_url: 'http://localhost:12111',
+		});
+		expect(getStripe(real)).toBe(getStripe(real));
+		expect(getStripe(fake)).not.toBe(getStripe(real));
+	});
+
+	it('parses host, port and protocol from the URL', () => {
+		expect(stripeApiOptions(undefined)).toEqual({});
+		expect(stripeApiOptions('http://127.0.0.1:12111/ignored/path')).toEqual({
+			host: '127.0.0.1',
+			port: 12111,
+			protocol: 'http',
+		});
+		expect(stripeApiOptions('https://stripe-mock.test')).toEqual({
+			host: 'stripe-mock.test',
+			port: 443,
+			protocol: 'https',
+		});
+		expect(stripeApiOptions('http://stripe-mock.test')).toMatchObject({ port: 80 });
+	});
+
+	it('rejects a malformed or non-http(s) URL', () => {
+		expect(() => stripeApiOptions('not a url')).toThrow(DelightError);
+		expect(() => stripeApiOptions('ftp://stripe-mock.test')).toThrow(DelightError);
 	});
 });

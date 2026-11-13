@@ -15,11 +15,7 @@ import {
 	getAppUrl,
 	resolveReturnUrl,
 } from './billing.stripe.js';
-import {
-	syncSubscription,
-	fetchSubscriptionState,
-	activePlanIds,
-} from './billing.sync.js';
+import { syncAndNotify, fetchSubscriptionState, activePlanIds } from './billing.sync.js';
 
 export interface RouteContext {
 	getAuthServer?: (event: RequestEvent) => AuthServerRpc | undefined;
@@ -316,10 +312,11 @@ export async function handleBillingRoute(
 				}),
 			);
 
+			let changed: Stripe.Subscription;
 			if (subs.data.length > 0) {
 				// Update existing subscription
 				const existing = subs.data[0];
-				await stripeCall(() =>
+				changed = await stripeCall(() =>
 					stripe.subscriptions.update(existing.id, {
 						items: [
 							...existing.items.data.map((item) => ({
@@ -335,7 +332,7 @@ export async function handleBillingRoute(
 				);
 			} else {
 				// Create new subscription
-				await stripeCall(() =>
+				changed = await stripeCall(() =>
 					stripe.subscriptions.create({
 						customer: customer_id,
 						items: [{ price: price.id }],
@@ -346,27 +343,19 @@ export async function handleBillingRoute(
 				);
 			}
 
-			// Sync and return updated state
-			const state = await syncSubscription({
-				config,
-				customer_id,
-				org_id: getOrgId(event, config),
-				user_id: getUserId(event),
-				auth: ctx.getAuthServer?.(event),
-				ws: ctx.getWebsocket?.(event),
-				setOrgState: getSetOrgState(event, config),
-			});
-
-			if (config.hooks?.onSubscriptionChange && state) {
-				await config.hooks.onSubscriptionChange({
+			// Sync, tell the app, and return updated state
+			const state = await syncAndNotify(
+				{
+					config,
 					customer_id,
-					subscription_id: state.subscription_id,
-					status: state.status,
-					plan_id: state.plan_ids[0] ?? null,
-					entitlements: state.entitlements,
-					event,
-				});
-			}
+					org_id: getOrgId(event, config),
+					user_id: getUserId(event),
+					auth: ctx.getAuthServer?.(event),
+					ws: ctx.getWebsocket?.(event),
+					setOrgState: getSetOrgState(event, config),
+				},
+				{ event, known: { id: changed.id, status: changed.status } },
+			);
 
 			return jsonResponse({ subscription: state });
 		}
@@ -409,29 +398,28 @@ export async function handleBillingRoute(
 				}
 			}
 
-			// Sync to clear entitlements
-			const state = await syncSubscription({
-				config,
-				customer_id,
-				org_id: getOrgId(event, config),
-				user_id: getUserId(event),
-				auth: ctx.getAuthServer?.(event),
-				ws: ctx.getWebsocket?.(event),
-				setOrgState: getSetOrgState(event, config),
-			});
-
-			// Fire the lifecycle hook for cancellations too — when nothing remains,
-			// report the canceled subscription explicitly
-			if (config.hooks?.onSubscriptionChange && cancellable) {
-				await config.hooks.onSubscriptionChange({
+			// Sync to clear entitlements, and tell the app. When nothing remains,
+			// the canceled subscription is reported explicitly.
+			await syncAndNotify(
+				{
+					config,
 					customer_id,
-					subscription_id: state?.subscription_id ?? cancellable.id,
-					status: state?.status ?? 'canceled',
-					plan_id: state?.plan_ids[0] ?? null,
-					entitlements: state?.entitlements ?? [],
+					org_id: getOrgId(event, config),
+					user_id: getUserId(event),
+					auth: ctx.getAuthServer?.(event),
+					ws: ctx.getWebsocket?.(event),
+					setOrgState: getSetOrgState(event, config),
+				},
+				{
 					event,
-				});
-			}
+					known: cancellable
+						? {
+								id: cancellable.id,
+								status: cancel_at_period_end ? cancellable.status : 'canceled',
+							}
+						: undefined,
+				},
+			);
 
 			return new Response(null, { status: 204 });
 		}
@@ -607,15 +595,18 @@ export async function handleBillingRoute(
 			const customer_id = await resolveCustomerIdAsync(event, config);
 			if (!customer_id) return jsonResponse({ subscription: null });
 
-			const state = await syncSubscription({
-				config,
-				customer_id,
-				org_id: getOrgId(event, config),
-				user_id: getUserId(event),
-				auth: ctx.getAuthServer?.(event),
-				ws: ctx.getWebsocket?.(event),
-				setOrgState: getSetOrgState(event, config),
-			});
+			const state = await syncAndNotify(
+				{
+					config,
+					customer_id,
+					org_id: getOrgId(event, config),
+					user_id: getUserId(event),
+					auth: ctx.getAuthServer?.(event),
+					ws: ctx.getWebsocket?.(event),
+					setOrgState: getSetOrgState(event, config),
+				},
+				{ event },
+			);
 			return jsonResponse({ subscription: state });
 		}
 

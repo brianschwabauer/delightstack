@@ -5,6 +5,7 @@ import {
 	syncSubscription,
 	fetchSubscriptionState,
 	activePlanIds,
+	ownedEntitlementBits,
 } from './billing.sync.js';
 
 const { stripe_mock } = vi.hoisted(() => ({
@@ -229,5 +230,174 @@ describe('activePlanIds', () => {
 		expect(activePlanIds({ ...base, status: 'trialing' })).toEqual(['pro']);
 		expect(activePlanIds({ ...base, status: 'canceled' })).toEqual([]);
 		expect(activePlanIds({ ...base, status: 'past_due' })).toEqual([]);
+	});
+});
+
+describe('plan bits the package does not own', () => {
+	// bit 0 premium, bit 1 video-uploads (granted by plans); bit 2 onboarded
+	// (app-owned: in the auth entitlements array, no plan grants it)
+	const masked_config = defineBillingConfig({
+		secret_key: 'sk_test_mask',
+		publishable_key: 'pk_test_mask',
+		entitlements: ['premium', 'video-uploads', 'onboarded'] as const,
+		plans: [
+			{
+				id: 'pro',
+				name: 'Pro',
+				lookup_key: 'pro_monthly',
+				amount: 999,
+				interval: 'month',
+				entitlements: ['premium', 'video-uploads'],
+			},
+			{
+				id: 'basic',
+				name: 'Basic',
+				lookup_key: 'basic_monthly',
+				amount: 499,
+				interval: 'month',
+				entitlements: ['premium'],
+			},
+		],
+	});
+	// bit 2 (onboarded) and bit 5 (outside the entitlements array entirely)
+	const FOREIGN_BITS = 0b100100;
+
+	function authWithPlan(plan: number | null) {
+		return {
+			updateOrg: vi.fn(),
+			getOrg: vi.fn(async () => ({ plan, json: null })),
+		};
+	}
+
+	it('owns only the bits some plan grants', () => {
+		expect(ownedEntitlementBits(masked_config)).toBe(0b011);
+		expect(ownedEntitlementBits(config)).toBe(0b11);
+		expect(
+			ownedEntitlementBits(
+				defineBillingConfig({
+					secret_key: 'sk_test_none',
+					publishable_key: 'pk_test_none',
+					entitlements: ['premium'],
+				}),
+			),
+		).toBe(0);
+	});
+
+	it('an active subscription sets its bits and keeps the foreign ones', async () => {
+		stripe_mock.subscriptions.list.mockResolvedValue(listPage([makeSub()]));
+		const auth = authWithPlan(FOREIGN_BITS);
+
+		await syncSubscription({
+			config: masked_config,
+			customer_id: 'cus_1',
+			org_id: 'org_1',
+			auth,
+		});
+
+		expect(auth.getOrg).toHaveBeenCalledWith('org_1');
+		expect(auth.updateOrg).toHaveBeenCalledWith('org_1', { plan: FOREIGN_BITS | 0b011 });
+	});
+
+	it('a downgrade clears only the bits the old plan granted', async () => {
+		stripe_mock.subscriptions.list.mockResolvedValue(
+			listPage([
+				makeSub({
+					items: { data: [{ price: { product: { metadata: { plan_id: 'basic' } } } }] },
+				}),
+			]),
+		);
+		const auth = authWithPlan(FOREIGN_BITS | 0b011);
+
+		await syncSubscription({
+			config: masked_config,
+			customer_id: 'cus_1',
+			org_id: 'org_1',
+			auth,
+		});
+
+		expect(auth.updateOrg).toHaveBeenCalledWith('org_1', { plan: FOREIGN_BITS | 0b001 });
+	});
+
+	it('a canceled subscription clears owned bits and keeps the foreign ones', async () => {
+		stripe_mock.subscriptions.list.mockResolvedValue(
+			listPage([makeSub({ status: 'canceled' })]),
+		);
+		const auth = authWithPlan(FOREIGN_BITS | 0b011);
+
+		await syncSubscription({
+			config: masked_config,
+			customer_id: 'cus_1',
+			org_id: 'org_1',
+			auth,
+		});
+
+		expect(auth.updateOrg).toHaveBeenCalledWith('org_1', { plan: FOREIGN_BITS });
+	});
+
+	it('an incomplete-only customer keeps the foreign bits', async () => {
+		stripe_mock.subscriptions.list.mockResolvedValue(
+			listPage([makeSub({ status: 'incomplete' })]),
+		);
+		const auth = authWithPlan(FOREIGN_BITS | 0b001);
+
+		await syncSubscription({
+			config: masked_config,
+			customer_id: 'cus_1',
+			org_id: 'org_1',
+			auth,
+		});
+
+		expect(auth.updateOrg).toHaveBeenCalledWith('org_1', { plan: FOREIGN_BITS });
+	});
+
+	it('skips the write when the plan would not change', async () => {
+		stripe_mock.subscriptions.list.mockResolvedValue(listPage([makeSub()]));
+		const auth = authWithPlan(FOREIGN_BITS | 0b011);
+
+		await syncSubscription({
+			config: masked_config,
+			customer_id: 'cus_1',
+			org_id: 'org_1',
+			auth,
+		});
+
+		expect(auth.getOrg).toHaveBeenCalledTimes(1);
+		expect(auth.updateOrg).not.toHaveBeenCalled();
+	});
+
+	it('treats a missing plan value as 0', async () => {
+		stripe_mock.subscriptions.list.mockResolvedValue(listPage([makeSub()]));
+		const auth = authWithPlan(null);
+
+		await syncSubscription({
+			config: masked_config,
+			customer_id: 'cus_1',
+			org_id: 'org_1',
+			auth,
+		});
+
+		expect(auth.updateOrg).toHaveBeenCalledWith('org_1', { plan: 0b011 });
+	});
+
+	it('does not write at all when no plan grants an entitlement', async () => {
+		stripe_mock.subscriptions.list.mockResolvedValue(listPage([makeSub()]));
+		const auth = authWithPlan(FOREIGN_BITS);
+
+		await syncSubscription({
+			config: defineBillingConfig({
+				secret_key: 'sk_test_none',
+				publishable_key: 'pk_test_none',
+				entitlements: ['premium'],
+				plans: [
+					{ id: 'pro', name: 'Pro', lookup_key: 'pro', amount: 1, interval: 'month' },
+				],
+			}),
+			customer_id: 'cus_1',
+			org_id: 'org_1',
+			auth,
+		});
+
+		expect(auth.getOrg).not.toHaveBeenCalled();
+		expect(auth.updateOrg).not.toHaveBeenCalled();
 	});
 });

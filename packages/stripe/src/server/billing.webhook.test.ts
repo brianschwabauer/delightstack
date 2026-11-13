@@ -231,6 +231,146 @@ describe('subscription deletion', () => {
 	});
 });
 
+describe('onSubscriptionChange when nothing in the priority list remains', () => {
+	function listedSub(status: string, overrides: Record<string, unknown> = {}) {
+		return {
+			id: `sub_${status}`,
+			status,
+			created: 1000,
+			items: { data: [{ price: { product: { metadata: { plan_id: 'pro' } } } }] },
+			current_period_start: 1000,
+			current_period_end: 2000,
+			cancel_at: null,
+			canceled_at: null,
+			trial_start: null,
+			trial_end: null,
+			...overrides,
+		};
+	}
+
+	const plan_config = {
+		entitlements: ['premium', 'onboarded'],
+		plans: [
+			{
+				id: 'pro',
+				name: 'Pro',
+				lookup_key: 'pro_monthly',
+				amount: 999,
+				interval: 'month',
+				entitlements: ['premium'],
+			},
+		],
+	};
+
+	for (const status of ['incomplete', 'unpaid', 'paused']) {
+		it(`fires for a customer whose only subscription is ${status}`, async () => {
+			const onSubscriptionChange = vi.fn();
+			const config = makeConfig({ ...plan_config, hooks: { onSubscriptionChange } });
+			const sub = listedSub(status);
+			const stripe_event = makeStripeEvent('customer.subscription.updated', {
+				...sub,
+				customer: 'cus_1',
+			});
+			signEvent(stripe_event);
+			stripe_mock.subscriptions.list.mockResolvedValue({ data: [sub], has_more: false });
+			// premium (owned) + onboarded (app-owned) set before the webhook
+			const auth = {
+				updateOrg: vi.fn(),
+				getOrg: vi.fn(async () => ({ plan: 0b11, json: null })),
+			};
+
+			const response = await handleWebhook(makeRequestEvent(), config, {
+				getAuthServer: () => auth,
+			});
+
+			expect(response.status).toBe(200);
+			expect(onSubscriptionChange).toHaveBeenCalledTimes(1);
+			expect(onSubscriptionChange).toHaveBeenCalledWith(
+				expect.objectContaining({
+					customer_id: 'cus_1',
+					subscription_id: sub.id,
+					status,
+					plan_id: null,
+					entitlements: [],
+					event_id: stripe_event.id,
+				}),
+			);
+			// The grant is cleared; the app's onboarded bit stays
+			expect(auth.updateOrg).toHaveBeenCalledWith('org_1', { plan: 0b10 });
+		});
+	}
+
+	it('reports the newest subscription when several are outside the list', async () => {
+		const onSubscriptionChange = vi.fn();
+		const config = makeConfig({ ...plan_config, hooks: { onSubscriptionChange } });
+		const older = listedSub('incomplete_expired', { id: 'sub_old', created: 1000 });
+		const newer = listedSub('incomplete', { id: 'sub_new', created: 2000 });
+		signEvent(
+			makeStripeEvent('customer.subscription.created', { ...newer, customer: 'cus_1' }),
+		);
+		stripe_mock.subscriptions.list.mockResolvedValue({
+			data: [older, newer],
+			has_more: false,
+		});
+
+		await handleWebhook(makeRequestEvent(), config, {});
+
+		expect(onSubscriptionChange).toHaveBeenCalledWith(
+			expect.objectContaining({ subscription_id: 'sub_new', status: 'incomplete' }),
+		);
+	});
+
+	it('falls back to the event payload while the list is still empty', async () => {
+		const onSubscriptionChange = vi.fn();
+		const config = makeConfig({ ...plan_config, hooks: { onSubscriptionChange } });
+		signEvent(
+			makeStripeEvent('customer.subscription.created', {
+				...listedSub('incomplete', { id: 'sub_lagging' }),
+				customer: 'cus_1',
+			}),
+		);
+
+		await handleWebhook(makeRequestEvent(), config, {});
+
+		expect(onSubscriptionChange).toHaveBeenCalledWith(
+			expect.objectContaining({
+				subscription_id: 'sub_lagging',
+				status: 'incomplete',
+				plan_id: null,
+				entitlements: [],
+			}),
+		);
+	});
+
+	it('fires after a subscription checkout completes', async () => {
+		const onSubscriptionChange = vi.fn();
+		const config = makeConfig({ ...plan_config, hooks: { onSubscriptionChange } });
+		const stripe_event = makeStripeEvent('checkout.session.completed', {
+			id: 'cs_sub',
+			mode: 'subscription',
+			customer: 'cus_1',
+			subscription: 'sub_active',
+		});
+		signEvent(stripe_event);
+		stripe_mock.subscriptions.list.mockResolvedValue({
+			data: [listedSub('active')],
+			has_more: false,
+		});
+
+		await handleWebhook(makeRequestEvent(), config, {});
+
+		expect(onSubscriptionChange).toHaveBeenCalledWith(
+			expect.objectContaining({
+				subscription_id: 'sub_active',
+				status: 'active',
+				plan_id: 'pro',
+				entitlements: ['premium'],
+				event_id: stripe_event.id,
+			}),
+		);
+	});
+});
+
 describe('amounts stay integer cents', () => {
 	it('passes integer cents to onPaymentSuccess and the broadcast', async () => {
 		const onPaymentSuccess = vi.fn();

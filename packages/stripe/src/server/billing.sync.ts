@@ -1,3 +1,4 @@
+import type { RequestEvent } from '@sveltejs/kit';
 import type Stripe from 'stripe';
 import type {
 	ResolvedBillingConfig,
@@ -134,6 +135,22 @@ export function activePlanIds(state: SubscriptionState | null): string[] {
 export async function syncSubscription(
 	ctx: SyncContext,
 ): Promise<SubscriptionState | null> {
+	return (await runSync(ctx)).state;
+}
+
+/** A subscription the caller already knows about, for when Stripe's list lags */
+export interface KnownSubscription {
+	id: string;
+	status: string;
+}
+
+/** The state a sync computed, and the subscriptions it computed it from */
+interface SyncResult {
+	state: SubscriptionState | null;
+	subscriptions: Stripe.Subscription[];
+}
+
+async function runSync(ctx: SyncContext): Promise<SyncResult> {
 	const subscriptions = await listAllSubscriptions(ctx.config, ctx.customer_id);
 	const state = computeState(ctx.config, subscriptions);
 
@@ -144,24 +161,124 @@ export async function syncSubscription(
 	ctx.setOrgState?.({ billing_plan_ids: activePlanIds(state) });
 
 	broadcastChange(ctx, state);
+	return { state, subscriptions };
+}
+
+/**
+ * Re-syncs the customer (see `syncSubscription`) and then calls the
+ * `onSubscriptionChange` hook. Every package path that re-syncs a customer
+ * goes through here so the hook never misses one.
+ *
+ * `known` is the subscription the caller just saw (the webhook's object, the
+ * one a route created or canceled). It is reported only when Stripe's list
+ * comes back empty, as it can for a moment after a change.
+ * @internal
+ */
+export async function syncAndNotify(
+	ctx: SyncContext,
+	notify: { event: RequestEvent; event_id?: string; known?: KnownSubscription },
+): Promise<SubscriptionState | null> {
+	const { state, subscriptions } = await runSync(ctx);
+	const hook = ctx.config.hooks?.onSubscriptionChange;
+	if (!hook) return state;
+
+	const change = describeChange(state, subscriptions, notify.known);
+	if (!change) return state;
+
+	await hook({
+		customer_id: ctx.customer_id,
+		...change,
+		...(notify.event_id ? { event_id: notify.event_id } : {}),
+		event: notify.event,
+	});
 	return state;
 }
 
-/** Encode entitlement names to a bitwise integer and update the auth org */
+/** The subscription the hook reports, or null when the customer has none */
+function describeChange(
+	state: SubscriptionState | null,
+	subscriptions: Stripe.Subscription[],
+	known: KnownSubscription | undefined,
+): {
+	subscription_id: string;
+	status: string;
+	plan_id: string | null;
+	entitlements: string[];
+} | null {
+	if (state) {
+		return {
+			subscription_id: state.subscription_id,
+			status: state.status,
+			plan_id: state.plan_ids[0] ?? null,
+			entitlements: state.entitlements,
+		};
+	}
+
+	// Nothing in the priority list: report the newest other subscription
+	// (incomplete, unpaid, paused, ...) with its real status. It grants nothing.
+	const newest = [...subscriptions].sort(
+		(a, b) => (b.created ?? 0) - (a.created ?? 0),
+	)[0];
+	const reported = newest ? { id: newest.id, status: newest.status } : known;
+	if (!reported) return null;
+	return {
+		subscription_id: reported.id,
+		status: reported.status,
+		plan_id: null,
+		entitlements: [],
+	};
+}
+
+/**
+ * The plan bits this package owns: one per entitlement that some configured
+ * plan grants, at its index in `config.entitlements`. Every other bit of the
+ * org's `plan` belongs to the app.
+ */
+export function ownedEntitlementBits(config: ResolvedBillingConfig): number {
+	const entitlements_array = config.entitlements ?? [];
+	let owned = 0;
+	for (const plan of config.plans ?? []) {
+		for (const name of plan.entitlements ?? []) {
+			const bit = entitlements_array.indexOf(name);
+			if (bit !== -1) owned |= 1 << bit;
+		}
+	}
+	return owned;
+}
+
+/**
+ * Sets the org's owned plan bits to the granted entitlements, leaving every
+ * other bit as it was. Skips the write when nothing would change.
+ */
 async function updateEntitlements(
 	ctx: SyncContext,
 	entitlement_names: string[],
 ): Promise<void> {
 	if (!ctx.auth || !ctx.org_id || !ctx.config.entitlements?.length) return;
 
+	const owned = ownedEntitlementBits(ctx.config);
+	if (!owned) return;
+
 	const entitlements_array = ctx.config.entitlements;
-	let encoded = 0;
+	let granted = 0;
 	for (const name of entitlement_names) {
 		const bit = entitlements_array.indexOf(name);
-		if (bit !== -1) encoded |= 1 << bit;
+		if (bit !== -1) granted |= 1 << bit;
+	}
+	granted &= owned;
+
+	// Without a read there is no current value to preserve (see AuthServerRpc.getOrg)
+	if (!ctx.auth.getOrg) {
+		await ctx.auth.updateOrg(ctx.org_id, { plan: granted });
+		return;
 	}
 
-	await ctx.auth.updateOrg(ctx.org_id, { plan: encoded });
+	const org = await ctx.auth.getOrg(ctx.org_id);
+	const current = (org?.plan ?? 0) | 0;
+	const next = (current & ~owned) | granted;
+	if (next === current) return;
+
+	await ctx.auth.updateOrg(ctx.org_id, { plan: next });
 }
 
 /** Broadcast subscription change via WebSocket */

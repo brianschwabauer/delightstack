@@ -5,6 +5,7 @@ export {
 	type PlanDefinition,
 	type MeterDefinition,
 	type AuthServerRpc,
+	type AuthOrgRecord,
 	type WebsocketRpc,
 	type WebhookEventStore,
 } from './billing.config.js';

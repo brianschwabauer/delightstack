@@ -80,6 +80,39 @@ import { reportMeterEvent } from '@delightstack/stripe/server';
 await reportMeterEvent(billing, { meter: 'ai-tokens', value: 1200, customer });
 ```
 
+## How plan bits are written
+
+A subscription sync writes the org's `plan` integer through the auth RPC. The package owns only
+the bits of entitlements that some plan in `plans` grants, at their index in `entitlements`. It
+reads the org (`getOrg`), sets or clears those bits, and leaves every other bit alone, so flags
+your app keeps in `plan` survive every webhook. Nothing is written when the value would not
+change. Pass an auth RPC that has `getOrg` (the `@delightstack/auth` server does); without it the
+sync replaces the whole integer.
+
+## `onSubscriptionChange`
+
+The hook runs after every re-sync of a customer: the `customer.subscription.*` and
+subscription-mode `checkout.session.completed` webhooks, and the `POST /subscription`,
+`DELETE /subscription` and `POST /sync` routes. It describes the most relevant subscription
+(active, then trialing, past_due, canceled). A customer whose only subscription is `incomplete`,
+`unpaid` or `paused` is reported with that status, `plan_id: null` and no entitlements. A
+customer with no subscription at all is not reported. Webhook calls carry `event_id`; key any
+non-idempotent side effect by it.
+
+## Testing against a fake Stripe
+
+```typescript
+export const billing = defineBillingConfig({
+	secret_key: env.STRIPE_SECRET_KEY,
+	publishable_key: env.STRIPE_PUBLISHABLE_KEY,
+	stripe_api_url: dev ? env.STRIPE_API_URL : undefined, // e.g. 'http://localhost:12111'
+});
+```
+
+`stripe_api_url` points every Stripe API call at another server. Its protocol, host and port go
+to the Stripe SDK; the path is ignored. The client always uses the SDK's fetch HTTP client, so
+it works on Cloudflare Workers.
+
 <Aside>
 Webhook secrets and the publishable key are set as worker secrets / vars
 (`STRIPE_SECRET_KEY`, `PUBLIC_STRIPE_PUBLISHABLE_KEY`). See the

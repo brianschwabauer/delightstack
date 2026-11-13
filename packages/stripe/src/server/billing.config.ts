@@ -61,20 +61,26 @@ export interface MeterDefinition {
 	value_key?: string;
 }
 
+/** The org fields the billing package reads back through `AuthServerRpc.getOrg` */
+export interface AuthOrgRecord {
+	json?: string | null;
+	plan?: number | null;
+}
+
 /** Minimal RPC interface for the auth server (avoids hard dependency) */
 export interface AuthServerRpc {
 	updateOrg(id: string, data: { plan?: number; json?: string }): unknown;
 	/**
-	 * Optional read of the org record. When provided, the billing package
-	 * read-modify-writes the org's `json` metadata instead of overwriting it.
+	 * Read of the org record (the `@delightstack/auth` server's `getOrg`).
+	 * Optional in the type, but pass it: with it the billing package
+	 * read-modify-writes the org — it changes only the plan bits a configured
+	 * plan can grant, leaves every other bit of `plan` alone, and merges into
+	 * the org's `json` metadata. Without it, a subscription sync replaces the
+	 * whole `plan` integer.
 	 */
 	getOrg?(
 		id: string,
-	):
-		| { json?: string | null }
-		| null
-		| undefined
-		| Promise<{ json?: string | null } | null | undefined>;
+	): AuthOrgRecord | null | undefined | Promise<AuthOrgRecord | null | undefined>;
 }
 
 /**
@@ -124,6 +130,15 @@ export interface BillingConfig<E extends string = string> {
 	/** Whether the app is in dev mode @default false */
 	dev?: boolean;
 
+	/**
+	 * Base URL for Stripe API calls, for tests and local development against a
+	 * fake Stripe server. Its protocol, hostname and port go to the Stripe SDK
+	 * (`protocol`/`host`/`port`); any path is ignored. Omit it to talk to
+	 * Stripe itself.
+	 * @example 'http://localhost:12111'
+	 */
+	stripe_api_url?: string;
+
 	/** Base path for billing API routes @default '/api/billing' */
 	base_path?: string;
 
@@ -137,6 +152,10 @@ export interface BillingConfig<E extends string = string> {
 	 * Entitlement names that correspond to the auth package's entitlements array.
 	 * Array index = bit position. Must match the auth config's entitlements array.
 	 * Used to map plan entitlements to the auth system's bitwise encoding.
+	 *
+	 * The package owns only the bits of entitlements some plan in `plans`
+	 * grants. A subscription sync sets or clears those bits in the org's `plan`
+	 * and leaves every other bit (app-owned flags) as it was.
 	 * @example ['premium', 'video-uploads', 'extra-usage']
 	 */
 	entitlements?: readonly E[];
@@ -181,10 +200,23 @@ export interface BillingConfig<E extends string = string> {
 
 	/** Lifecycle hooks for billing events */
 	hooks?: {
-		/** Called after a subscription is created, updated, canceled, or deleted */
+		/**
+		 * Called every time the package re-syncs a customer's subscription
+		 * state: the `customer.subscription.*` and subscription-mode
+		 * `checkout.session.completed` webhooks, and the POST /subscription,
+		 * DELETE /subscription and POST /sync routes.
+		 *
+		 * Describes the customer's most relevant subscription (active > trialing
+		 * > past_due > canceled). When none of those exist but another
+		 * subscription does (`incomplete`, `incomplete_expired`, `unpaid`,
+		 * `paused`), it is reported with its real status, `plan_id: null` and no
+		 * entitlements, since it grants nothing. Not called when the customer has
+		 * no subscription at all.
+		 */
 		onSubscriptionChange?: (ctx: {
 			customer_id: string;
 			subscription_id: string;
+			/** The Stripe subscription status; only `active` and `trialing` grant */
 			status: string;
 			plan_id: string | null;
 			entitlements: string[];

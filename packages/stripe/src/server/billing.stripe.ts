@@ -3,21 +3,59 @@ import { DelightError } from '@delightstack/utilities';
 import type { ResolvedBillingConfig } from './billing.config.js';
 import type { PaymentMethodInfo, InvoiceInfo } from '../types/index.js';
 
-/** Cached Stripe instance per secret key */
+/** Cached Stripe instance per secret key + API base URL */
 const stripe_instances = new Map<string, Stripe>();
 
-/** Get or create a Stripe instance */
+/** The Stripe SDK's host/port/protocol options for a `stripe_api_url` */
+export function stripeApiOptions(stripe_api_url: string | undefined): {
+	host?: string;
+	port?: number;
+	protocol?: 'http' | 'https';
+} {
+	if (!stripe_api_url) return {};
+	let url: URL;
+	try {
+		url = new URL(stripe_api_url);
+	} catch {
+		throw new DelightError({
+			message: `Billing config: stripe_api_url is not a valid URL (${stripe_api_url})`,
+			status: 500,
+			code: 'billing/invalid_stripe_api_url',
+		});
+	}
+	if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+		throw new DelightError({
+			message: `Billing config: stripe_api_url must be an http(s) URL (${stripe_api_url})`,
+			status: 500,
+			code: 'billing/invalid_stripe_api_url',
+		});
+	}
+	const protocol = url.protocol === 'https:' ? 'https' : 'http';
+	return {
+		host: url.hostname,
+		port: url.port ? Number(url.port) : protocol === 'https' ? 443 : 80,
+		protocol,
+	};
+}
+
+/**
+ * Get or create a Stripe instance. It always uses the fetch HTTP client, so
+ * it runs on Cloudflare Workers, and talks to `config.stripe_api_url` when set.
+ */
 export function getStripe(config: ResolvedBillingConfig): Stripe {
-	let instance = stripe_instances.get(config.secret_key);
+	const cache_key = `${config.secret_key}|${config.stripe_api_url ?? ''}`;
+	let instance = stripe_instances.get(cache_key);
 	if (!instance) {
 		instance = new Stripe(config.secret_key, {
 			typescript: true,
+			httpClient: Stripe.createFetchHttpClient(),
 			appInfo: {
 				name: 'delightstack',
 				version: '0.1.0',
 			},
+			...stripeApiOptions(config.stripe_api_url),
 		});
-		stripe_instances.set(config.secret_key, instance);
+		stripe_instances.set(cache_key, instance);
 	}
 	return instance;
 }

@@ -7,7 +7,7 @@ import type {
 } from './billing.config.js';
 import { DelightError } from '@delightstack/utilities';
 import { getStripe } from './billing.stripe.js';
-import { syncSubscription } from './billing.sync.js';
+import { syncAndNotify } from './billing.sync.js';
 import { ensureWebhookRegistered } from './billing.webhook.register.js';
 
 export interface WebhookContext {
@@ -178,39 +178,27 @@ export async function handleWebhook(
 			const customer_id = extractCustomerId(subscription.customer);
 			const org_id = await resolveOrgIdFromCustomer(stripe, customer_id);
 
-			const state = await syncSubscription({
-				config,
-				customer_id,
-				org_id,
-				auth: org_id ? ctx.getAuthServer?.(event) : undefined,
-				ws: org_id ? ctx.getWebsocket?.(event) : undefined,
-			});
-
-			if (config.hooks?.onSubscriptionChange) {
-				if (state) {
-					await config.hooks.onSubscriptionChange({
-						customer_id,
-						subscription_id: state.subscription_id,
-						status: state.status,
-						plan_id: state.plan_ids[0] ?? null,
-						entitlements: state.entitlements,
-						event_id: stripe_event.id,
-						event,
-					});
-				} else if (stripe_event.type === 'customer.subscription.deleted') {
-					// No remaining subscription — still fire the hook so apps can
-					// react to cancellations (the most important lifecycle event)
-					await config.hooks.onSubscriptionChange({
-						customer_id,
-						subscription_id: subscription.id,
-						status: 'canceled',
-						plan_id: null,
-						entitlements: [],
-						event_id: stripe_event.id,
-						event,
-					});
-				}
-			}
+			await syncAndNotify(
+				{
+					config,
+					customer_id,
+					org_id,
+					auth: org_id ? ctx.getAuthServer?.(event) : undefined,
+					ws: org_id ? ctx.getWebsocket?.(event) : undefined,
+				},
+				{
+					event,
+					event_id: stripe_event.id,
+					// A deleted subscription is over, whatever status its payload carries
+					known: {
+						id: subscription.id,
+						status:
+							stripe_event.type === 'customer.subscription.deleted'
+								? 'canceled'
+								: subscription.status,
+					},
+				},
+			);
 			break;
 		}
 
@@ -276,13 +264,20 @@ export async function handleWebhook(
 				const customer_id = extractCustomerId(session.customer);
 				const org_id = await resolveOrgIdFromCustomer(stripe, customer_id);
 
-				await syncSubscription({
-					config,
-					customer_id,
-					org_id,
-					auth: org_id ? ctx.getAuthServer?.(event) : undefined,
-					ws: org_id ? ctx.getWebsocket?.(event) : undefined,
-				});
+				const known =
+					session.subscription && typeof session.subscription === 'object'
+						? { id: session.subscription.id, status: session.subscription.status }
+						: undefined;
+				await syncAndNotify(
+					{
+						config,
+						customer_id,
+						org_id,
+						auth: org_id ? ctx.getAuthServer?.(event) : undefined,
+						ws: org_id ? ctx.getWebsocket?.(event) : undefined,
+					},
+					{ event, event_id: stripe_event.id, known },
+				);
 			} else if (session.mode === 'payment' && session.customer) {
 				// One-time plan purchase — the checkout route stamped plan_id metadata.
 				// The package can't know what the purchase grants; the app applies it

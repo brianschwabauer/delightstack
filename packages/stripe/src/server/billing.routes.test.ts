@@ -454,6 +454,138 @@ describe('DELETE /subscription', () => {
 	});
 });
 
+describe('POST /sync', () => {
+	function sub(status: string) {
+		return {
+			id: `sub_${status}`,
+			status,
+			created: 1000,
+			items: { data: [{ price: { product: { metadata: { plan_id: 'pro' } } } }] },
+			current_period_start: 1000,
+			current_period_end: 2000,
+			cancel_at: null,
+			canceled_at: null,
+			trial_start: null,
+			trial_end: null,
+		};
+	}
+
+	async function postSync(onSubscriptionChange: ReturnType<typeof vi.fn>) {
+		const event = makeEvent({ method: 'POST', path: '/sync', locals: baseLocals() });
+		const response = await handleBillingRoute(
+			event,
+			{ ...config, hooks: { onSubscriptionChange } },
+			'/sync',
+			'POST',
+			{},
+		);
+		return { event, response };
+	}
+
+	it('fires onSubscriptionChange with the synced state', async () => {
+		stripe_mock.subscriptions.list.mockResolvedValue({
+			data: [sub('active')],
+			has_more: false,
+		});
+		const onSubscriptionChange = vi.fn();
+
+		const { event, response } = await postSync(onSubscriptionChange);
+
+		expect(response.status).toBe(200);
+		expect(onSubscriptionChange).toHaveBeenCalledTimes(1);
+		const hook_ctx = onSubscriptionChange.mock.calls[0][0];
+		expect(hook_ctx).toMatchObject({
+			customer_id: 'cus_me',
+			subscription_id: 'sub_active',
+			status: 'active',
+			plan_id: 'pro',
+			entitlements: ['premium'],
+		});
+		expect(hook_ctx.event).toBe(event);
+		expect(hook_ctx.event_id).toBeUndefined();
+	});
+
+	it('fires for an incomplete-only customer with its real status', async () => {
+		stripe_mock.subscriptions.list.mockResolvedValue({
+			data: [sub('incomplete')],
+			has_more: false,
+		});
+		const onSubscriptionChange = vi.fn();
+
+		const { response } = await postSync(onSubscriptionChange);
+
+		expect(response.status).toBe(200);
+		expect(onSubscriptionChange).toHaveBeenCalledWith(
+			expect.objectContaining({
+				subscription_id: 'sub_incomplete',
+				status: 'incomplete',
+				plan_id: null,
+				entitlements: [],
+			}),
+		);
+	});
+
+	it('does not fire for a customer with no subscription at all', async () => {
+		stripe_mock.subscriptions.list.mockResolvedValue({ data: [], has_more: false });
+		const onSubscriptionChange = vi.fn();
+
+		await postSync(onSubscriptionChange);
+
+		expect(onSubscriptionChange).not.toHaveBeenCalled();
+	});
+});
+
+describe('POST /subscription', () => {
+	it('fires onSubscriptionChange for a subscription created incomplete', async () => {
+		const onSubscriptionChange = vi.fn();
+		const incomplete = {
+			id: 'sub_new',
+			status: 'incomplete',
+			created: 1000,
+			items: { data: [{ price: { product: { metadata: { plan_id: 'pro' } } } }] },
+			current_period_start: 1000,
+			current_period_end: 2000,
+			cancel_at: null,
+			canceled_at: null,
+			trial_start: null,
+			trial_end: null,
+		};
+		stripe_mock.prices.list.mockResolvedValue({ data: [{ id: 'price_pro' }] });
+		stripe_mock.subscriptions.list.mockImplementation((params: { status?: string }) =>
+			Promise.resolve({
+				data: params?.status === 'all' ? [incomplete] : [],
+				has_more: false,
+			}),
+		);
+		stripe_mock.subscriptions.create.mockResolvedValue(incomplete);
+
+		const event = makeEvent({
+			method: 'POST',
+			path: '/subscription',
+			body: { plan_id: 'pro' },
+			locals: baseLocals(),
+		});
+		const response = await handleBillingRoute(
+			event,
+			{ ...config, hooks: { onSubscriptionChange } },
+			'/subscription',
+			'POST',
+			{},
+		);
+
+		expect(response.status).toBe(200);
+		expect(onSubscriptionChange).toHaveBeenCalledWith(
+			expect.objectContaining({
+				customer_id: 'cus_me',
+				subscription_id: 'sub_new',
+				status: 'incomplete',
+				plan_id: null,
+				entitlements: [],
+			}),
+		);
+	});
+});
+
 describe('customer search hardening', () => {
 	it('rejects billing identifiers containing quotes', async () => {
 		const locals = baseLocals({ org_state: {}, org_id: `org']:'x` });
