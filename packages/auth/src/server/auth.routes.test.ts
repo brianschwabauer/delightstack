@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { matchRoute, safeRedirect } from './auth.routes.js';
 
 type RouteCtx = Parameters<NonNullable<ReturnType<typeof matchRoute>>['handler']>[0];
@@ -970,5 +970,87 @@ describe('OAuth sign-in: the provider prompt', () => {
 	it('ignores prompt values it does not know', async () => {
 		expect((await start('?prompt=evil')).searchParams.has('prompt')).toBe(false);
 		expect((await start('')).searchParams.has('prompt')).toBe(false);
+	});
+});
+
+describe('OAuth providers with sign_in: false', () => {
+	const crm = {
+		client_id: 'cid',
+		client_secret: 'secret',
+		authorization_url: 'https://crm.example.com/authorize',
+		access_token_url: 'https://crm.example.com/token',
+		scopes: ['openid', 'contacts'],
+		sign_in: false,
+	};
+
+	/** Calls a GET route with `crm` (link-only) configured, and the given auth stubs */
+	async function get(path: string, auth: Record<string, unknown> = {}) {
+		const match = matchRoute('GET', path.split('?')[0])!;
+		const ctx = makeCtx({ params: match.params, auth });
+		(ctx.event as unknown as { url: URL }).url = new URL(
+			`https://app.example.com/api/auth${path}`,
+		);
+		(ctx.config as unknown as { oauth: unknown }).oauth = { crm };
+		(ctx as unknown as { applySession: unknown }).applySession = vi.fn(async () => {});
+		return match.handler(ctx);
+	}
+
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('answers 404 to the sign-in start, like an unknown provider', async () => {
+		const response = await get('/signin/crm');
+		expect(response.status).toBe(404);
+		expect(response.headers.get('location')).toBeNull();
+		const unknown = await get('/signin/nobody');
+		expect(unknown.status).toBe(404);
+		expect(await unknown.json()).toMatchObject({
+			message: 'Unknown OAuth provider: nobody',
+		});
+		expect(await response.json()).toMatchObject({
+			message: 'Unknown OAuth provider: crm',
+		});
+	});
+
+	it('answers 404 to the sign-in callback without exchanging the code', async () => {
+		const fetchMock = vi.fn(async () => Response.json({ access_token: 'at' }));
+		vi.stubGlobal('fetch', fetchMock);
+		const signInWithOauth = vi.fn();
+		const response = await get('/signin/crm/callback?code=abc', {
+			signInWithOauth,
+		});
+		expect(response.status).toBe(404);
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(signInWithOauth).not.toHaveBeenCalled();
+	});
+
+	it('still serves the connect route', async () => {
+		const response = await get('/oauth/crm');
+		expect(response.status).toBe(302);
+		const location = new URL(response.headers.get('location')!);
+		expect(location.origin + location.pathname).toBe('https://crm.example.com/authorize');
+		expect(location.searchParams.get('redirect_uri')).toBe(
+			'https://app.example.com/api/auth/oauth/crm/callback',
+		);
+		expect(location.searchParams.get('scope')).toBe('openid contacts');
+	});
+
+	it('still connects the account on the connect callback', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => Response.json({ access_token: 'at', expires_in: 3600 })),
+		);
+		const connectOauthAccount = vi.fn(async () => ({}));
+		const response = await get('/oauth/crm/callback?code=abc', {
+			connectOauthAccount,
+		});
+		expect(response.status).toBe(302);
+		expect(connectOauthAccount).toHaveBeenCalledOnce();
+		const [token, uid] = connectOauthAccount.mock.calls[0] as unknown as [
+			Record<string, unknown>,
+			string,
+		];
+		expect(token.vendor).toBe('crm');
+		expect(token.access_token).toBe('at');
+		expect(uid).toBe('user_1');
 	});
 });

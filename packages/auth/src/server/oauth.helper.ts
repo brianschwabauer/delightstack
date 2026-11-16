@@ -183,10 +183,11 @@ export const getOauthAccount = async (
 /** Maps OpenID Connect style claims (from an id_token or a user info endpoint) to an account */
 function accountFromClaims(claims: Record<string, unknown>): OauthAccountIdentity {
 	const email = typeof claims.email === 'string' ? claims.email : undefined;
-	// Vendors send `email_verified` as a boolean or as the string 'true'. Only an
-	// explicit "not verified" is disqualifying — plenty of vendors omit the claim
+	// Vendors send `email_verified` as a boolean or as a string in any casing ('true',
+	// 'FALSE'). Only an explicit "not verified" is disqualifying — plenty of vendors
+	// omit the claim
 	const verified = claims.email_verified ?? claims.verified_email;
-	const email_verified = `${verified ?? true}` !== 'false';
+	const email_verified = `${verified ?? true}`.trim().toLowerCase() !== 'false';
 	const id = claims.sub ?? claims.id;
 	const image = claims.picture ?? claims.avatar_url ?? claims.image;
 	return {

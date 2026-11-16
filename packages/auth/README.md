@@ -613,10 +613,34 @@ defineAuthConfig({
 			authorization_url: 'https://github.com/login/oauth/authorize',
 			access_token_url: 'https://github.com/login/oauth/access_token',
 			scopes: ['user:email'],
+			user_info_url: 'https://api.github.com/user',
+		},
+		// A provider you only connect to an existing account (an API integration)
+		crm: {
+			client_id: env.CRM_CLIENT_ID,
+			client_secret: env.CRM_CLIENT_SECRET,
+			authorization_url: 'https://crm.example.com/oauth/authorize',
+			access_token_url: 'https://crm.example.com/oauth/token',
+			scopes: ['openid', 'contacts'],
+			sign_in: false,
 		},
 	},
 });
 ```
+
+Each provider takes:
+
+| Option              | Type       | Default    | Description                                                                                                                                               |
+| ------------------- | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client_id`         | `string`   | _required_ | The OAuth client ID                                                                                                                                       |
+| `client_secret`     | `string`   | _required_ | The OAuth client secret                                                                                                                                   |
+| `authorization_url` | `string`   | _required_ | The provider's authorization endpoint                                                                                                                     |
+| `access_token_url`  | `string`   | _required_ | The provider's token endpoint                                                                                                                             |
+| `scopes`            | `string[]` | `[]`       | Scopes requested by both the sign-in and connect flows                                                                                                    |
+| `user_info_url`     | `string`   | —          | User info endpoint for the account's id, email, name and image. Only needed when the token response has no OpenID Connect `id_token`                       |
+| `sign_in`           | `boolean`  | `true`     | `false` makes the provider connect-only: `/signin/:vendor` and its callback answer 404 as if it weren't configured, while `/oauth/:vendor` keeps working |
+
+**Use `sign_in: false` for any provider that only connects an API.** Signing in with a provider links to an existing user by matching the provider's verified email, so a provider that can't be trusted to verify emails must not be a sign-in method. An `email_verified` (or `verified_email`) claim of `false`, or the string `"false"` in any casing, means the email is unverified and isn't used; a provider that omits the claim is trusted.
 
 **Sign-in flow:** `GET /signin/:vendor` redirects the user to the provider. The provider redirects back to `GET /signin/:vendor/callback`, which creates or signs into the account and sets the session cookie.
 

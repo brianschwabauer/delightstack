@@ -414,18 +414,28 @@ const signUpEmail: AuthRouteHandler = (ctx) =>
 /** The OpenID Connect `prompt` values the sign-in route passes through to the provider. */
 const OAUTH_PROMPTS = new Set(['select_account', 'consent', 'login']);
 
+/**
+ * The config of a provider people can sign in with. A provider configured with
+ * `sign_in: false` is only for connecting accounts, so it answers exactly like one
+ * that isn't configured at all.
+ */
+function signInOauthConfig(ctx: AuthRouteContext, vendor: string) {
+	const oauth_config = ctx.config.oauth?.[vendor];
+	if (!oauth_config || oauth_config.sign_in === false)
+		throw new DelightError({
+			message: `Unknown OAuth provider: ${vendor}`,
+			status: 404,
+		});
+	return oauth_config;
+}
+
 const signInOauth: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		const vendor = ctx.event.params.vendor;
 		if (!vendor)
 			throw new DelightError({ message: 'OAuth vendor is required', status: 400 });
 
-		const oauth_config = ctx.config.oauth?.[vendor];
-		if (!oauth_config)
-			throw new DelightError({
-				message: `Unknown OAuth provider: ${vendor}`,
-				status: 400,
-			});
+		const oauth_config = signInOauthConfig(ctx, vendor);
 
 		const redirect_to = safeRedirect(ctx.event.url.searchParams.get('redirect'));
 		const invitation_id = ctx.event.url.searchParams.get('invitation_id') || undefined;
@@ -469,12 +479,7 @@ const signInOauthCallback: AuthRouteHandler = (ctx) =>
 		if (!vendor)
 			throw new DelightError({ message: 'OAuth vendor is required', status: 400 });
 
-		const oauth_config = ctx.config.oauth?.[vendor];
-		if (!oauth_config)
-			throw new DelightError({
-				message: `Unknown OAuth provider: ${vendor}`,
-				status: 400,
-			});
+		const oauth_config = signInOauthConfig(ctx, vendor);
 
 		const code = ctx.event.url.searchParams.get('code');
 		if (!code)

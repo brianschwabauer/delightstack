@@ -75,6 +75,54 @@ describe('getOauthAccount', () => {
 		expect(account.account_email).toBeUndefined();
 	});
 
+	it.each(['FALSE', 'False', ' false ', 'false'])(
+		'drops the email when the vendor sends email_verified as the string %j',
+		async (email_verified) => {
+			const account = await getOauthAccount(
+				{},
+				{
+					access_token: 'at',
+					payload: {
+						id_token: makeIdToken({
+							sub: '1',
+							email: 'nope@example.com',
+							email_verified,
+						}),
+					},
+				},
+			);
+			expect(account.account_email).toBeUndefined();
+		},
+	);
+
+	it('drops the email when the user info endpoint says verified_email is "FALSE"', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({ id: 7, email: 'nope@example.com', verified_email: 'FALSE' }),
+			),
+		);
+		const account = await getOauthAccount(
+			{ user_info_url: 'https://api.example.com/userinfo' },
+			{ access_token: 'at', payload: {} },
+		);
+		expect(account.vendor_id).toBe('7');
+		expect(account.account_email).toBeUndefined();
+	});
+
+	it('keeps the email when the vendor sends email_verified as the string "TRUE"', async () => {
+		const account = await getOauthAccount(
+			{},
+			{
+				access_token: 'at',
+				payload: {
+					id_token: makeIdToken({ sub: '1', email: 'a@b.com', email_verified: 'TRUE' }),
+				},
+			},
+		);
+		expect(account.account_email).toBe('a@b.com');
+	});
+
 	it('keeps the email when the vendor omits the verified claim', async () => {
 		const account = await getOauthAccount(
 			{},

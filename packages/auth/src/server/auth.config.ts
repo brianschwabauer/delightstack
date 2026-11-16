@@ -126,6 +126,14 @@ export interface AuthConfig<
 			 * @example user_info_url: 'https://api.github.com/user'
 			 */
 			user_info_url?: string;
+			/**
+			 * Whether people can sign in with this provider. Set `false` for a provider
+			 * that's only connected to an existing account (an API integration, a CRM):
+			 * its `/signin/:vendor` routes then answer 404 as if it weren't configured,
+			 * and only the `/oauth/:vendor` connect routes serve it.
+			 * @default true
+			 */
+			sign_in?: boolean;
 		};
 	};
 
