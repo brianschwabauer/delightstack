@@ -27,6 +27,12 @@ export interface RenderOptions {
 	/** CSS class prefix for wrapper elements. Default 'ds-doc' */
 	class_prefix?: string;
 	/**
+	 * Give `h1`–`h6` an `id` derived from their own text, so `#some-heading`
+	 * links land somewhere. Default `true`; see {@link slugifyHeading} for the
+	 * slug a consumer has to generate to match one.
+	 */
+	heading_ids?: boolean;
+	/**
 	 * Text column width in px, used to compute responsive `sizes` for images
 	 * with srcsets (should match the host's --editor-measure). Default 736
 	 */
@@ -45,6 +51,30 @@ export function renderText(doc: JSONContent, options: RenderOptions = {}): strin
 }
 
 export { defaultBlockRenderers, defaultBlockTextRenderers } from './blocks.js';
+
+/**
+ * The slug `renderHTML` puts in a heading's `id` — exported so a table of
+ * contents, a backlink or a deep link can build the same `#fragment` from the
+ * same heading text without guessing at the rules.
+ *
+ * Lowercased; accents folded away by decomposing to NFKD and dropping the
+ * combining marks (`Café` → `cafe`, not `caf-`); every run of anything outside
+ * `[a-z0-9]` collapsed to a single `-`; no leading or trailing `-`. Text with
+ * nothing left after that (an emoji-only heading, say) slugs to `''`, and
+ * `renderHTML` leaves such a heading without an `id` rather than emitting an
+ * empty one.
+ *
+ * Duplicate headings are disambiguated by `renderHTML` per document, not here:
+ * the second `## Notes` in a document becomes `notes-2`, the third `notes-3`.
+ */
+export function slugifyHeading(text: string): string {
+	return String(text ?? '')
+		.toLowerCase()
+		.normalize('NFKD')
+		.replace(/\p{M}/gu, '')
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '');
+}
 
 export function esc(value: unknown): string {
 	return String(value ?? '')
@@ -78,6 +108,9 @@ interface ContextWithLinks extends RenderContext {
 
 function createContext(options: RenderOptions): ContextWithLinks {
 	const class_prefix = options.class_prefix ?? 'ds-doc';
+	const heading_ids = options.heading_ids ?? true;
+	/** Ids already handed out in THIS document, so `-2`/`-3` can be appended. */
+	const used_heading_ids = new Set<string>();
 	const blocks = { ...defaultBlockRenderers, ...options.blocks };
 	const text_renderers = { ...defaultBlockTextRenderers, ...options.text };
 	const marks = { ...BASE_MARKS, ...options.marks };
@@ -112,6 +145,21 @@ function createContext(options: RenderOptions): ContextWithLinks {
 		return html;
 	}
 
+	/**
+	 * The heading's own `id`: its plain text slugged, then made unique against
+	 * the headings already rendered in this document. Empty when `heading_ids`
+	 * is off, or when the heading has no sluggable text.
+	 */
+	function headingId(node: JSONContent): string {
+		if (!heading_ids) return '';
+		const base = slugifyHeading(context.render_text(node.content).trim());
+		if (!base) return '';
+		let id = base;
+		for (let n = 2; used_heading_ids.has(id); n++) id = `${base}-${n}`;
+		used_heading_ids.add(id);
+		return id;
+	}
+
 	function renderNode(node: JSONContent): string {
 		if (node.attrs?.uploading === true) return '';
 		switch (node.type) {
@@ -122,7 +170,9 @@ function createContext(options: RenderOptions): ContextWithLinks {
 				return `<p>${(node.content ?? []).map(renderInline).join('')}</p>`;
 			case 'heading': {
 				const level = Math.min(Math.max(Number(node.attrs?.level) || 2, 1), 6);
-				return `<h${level}>${(node.content ?? []).map(renderInline).join('')}</h${level}>`;
+				const id = headingId(node);
+				// The slug is `[a-z0-9-]` by construction, so it never needs escaping.
+				return `<h${level}${id ? ` id="${id}"` : ''}>${(node.content ?? []).map(renderInline).join('')}</h${level}>`;
 			}
 			case 'blockquote':
 				return `<blockquote>${context.render(node.content)}</blockquote>`;

@@ -247,6 +247,17 @@ const html = renderHTML(doc, { image_url: (id) => imageURL(id) });
 const searchable = renderText(doc);
 ```
 
+Headings come out with an `id` slugged from their own text (`## Rate limits` → `id="rate-limits"`),
+so `#fragment` links land somewhere; repeats within one document get `-2`, `-3`. Build the matching
+fragment with the exported slugifier rather than reimplementing the rules, and pass
+`heading_ids: false` to opt out:
+
+```ts
+import { renderHTML, slugifyHeading } from '@delightstack/editor/render';
+
+const toc = headings.map((h) => ({ text: h, href: `#${slugifyHeading(h)}` }));
+```
+
 ## Typography (`--editor-*`)
 
 The editor's own type scale is a set of custom properties, so a host that draws the same document

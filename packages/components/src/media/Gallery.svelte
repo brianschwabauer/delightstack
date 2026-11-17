@@ -1,6 +1,6 @@
 <script lang="ts" module>
 	import type { Component } from 'svelte';
-	import type { CarouselItem } from './carousel';
+	import type { CarouselItem } from './carousel.js';
 
 	/** A single action button that can be shown on a gallery item or in the carousel header. */
 	export interface GalleryItemAction {
@@ -81,7 +81,7 @@
 		isResponsiveSrcset,
 		normalizeCarouselItem,
 		pickLargestSrc,
-	} from './carousel';
+	} from './carousel.js';
 
 	let {
 		/**
@@ -1104,7 +1104,6 @@
 				},
 				setReturnFocus: focusTrapSetReturnFocus,
 				oninit: (instance) => (focusTrapInstance = instance),
-				initialFocus: false,
 			})}
 			{@attach contextMenu({ actions: flattenActions(actions?.[slide]) })}>
 			<div
