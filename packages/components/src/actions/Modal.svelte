@@ -24,7 +24,12 @@
 	import { crossfade, fade, scale } from 'svelte/transition';
 	import { quartOut } from 'svelte/easing';
 	import { type Snippet } from 'svelte';
-	import { focusTrap, generateID, ripple } from '@delightstack/utilities';
+	import {
+		focusTrap,
+		generateID,
+		ripple,
+		type FocusTrapOptions,
+	} from '@delightstack/utilities';
 	import Button from './Button.svelte';
 	import { scrollbar } from './scrollbar.js';
 
@@ -94,6 +99,13 @@
 
 		/** The function to call when the backdrop is clicked */
 		onbackdropclick = undefined as undefined | (() => void),
+
+		/**
+		 * Where focus goes when the dialog opens: an element, a selector, or a function
+		 * returning one (focus-trap's `initialFocus`). Default `false` leaves focus where it
+		 * was until the first Tab. Focus returns to the opener on close either way.
+		 */
+		initial_focus = false as FocusTrapOptions['initialFocus'],
 
 		...rest
 	} = $props();
@@ -185,7 +197,7 @@
 			escapeDeactivates: false,
 			allowOutsideClick: true,
 			returnFocusOnDeactivate: true,
-			initialFocus: false,
+			initialFocus: initial_focus,
 		})}
 		use:mountModal
 		{...rest}>

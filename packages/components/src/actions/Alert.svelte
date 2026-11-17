@@ -112,6 +112,10 @@
 		oncontinue = undefined as (() => void | Promise<void>) | undefined,
 	} = $props();
 
+	/** The cancel button: the least destructive action, which takes focus as the alert opens
+	 * (the ARIA alertdialog pattern) — keyboard focus never stays on the trigger behind it */
+	let cancel_button = $state(undefined as HTMLElement | undefined);
+
 	function handleCancel() {
 		open = false;
 		oncancel?.();
@@ -136,6 +140,7 @@
 	max_width="calc(100vw - 2rem)"
 	onclose={handleClose}
 	onbackdropclick={handleBackdropClick}
+	initial_focus={() => cancel_button}
 	{id}
 	class="alert-modal {class_name}">
 	<div class="alert">
@@ -154,7 +159,11 @@
 			<Button error={destructive} full_width onclick={oncontinue}>
 				{continue_text}
 			</Button>
-			<Button translucent full_width onclick={handleCancel}>
+			<Button
+				translucent
+				full_width
+				onclick={handleCancel}
+				bind:button_element={cancel_button}>
 				{cancel_text}
 			</Button>
 		</div>
