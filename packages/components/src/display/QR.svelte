@@ -420,10 +420,10 @@
 				const is_border = r === -1 || r === 7 || c === -1 || c === 7;
 				const is_outer = r === 0 || r === 6 || c === 0 || c === 6;
 				const is_inner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
-				modules[rr][cc] = is_outer || is_inner;
-				if (!is_border) {
-					reserved[rr][cc] = true;
-				}
+				modules[rr][cc] = !is_border && (is_outer || is_inner);
+				// The light separator around the finder is a function pattern too:
+				// left unreserved, data bits land in it and no scanner finds the code
+				reserved[rr][cc] = true;
 			}
 		}
 	}
@@ -597,15 +597,16 @@
 				modules[14 - i][8] = bit;
 			}
 
-			// Other two strips
-			if (i < 8) {
+			// Second copy: seven bits up the bottom-left strip, eight along the
+			// top-right one
+			if (i < 7) {
 				modules[size - 1 - i][8] = bit;
 			} else {
 				modules[8][size - 15 + i] = bit;
 			}
 		}
 
-		// Dark module
+		// Dark module, which the format bits never cover
 		modules[size - 8][8] = true;
 
 		// Version info (version >= 7)
@@ -728,6 +729,70 @@
 	 * Generate a QR code matrix from text data.
 	 * Returns a 2D boolean array where `true` = dark module.
 	 */
+	/**
+	 * The finder and alignment patterns, as squares in module coordinates.
+	 * `rounded` draws each as one solid shape: scanners locate a code by the
+	 * 1:1:3:1:1 run through a finder, which separate dots never produce.
+	 */
+	interface SolidPattern {
+		row: number;
+		col: number;
+		size: 7 | 5;
+	}
+
+	function solidPatterns(count: number): SolidPattern[] {
+		const patterns: SolidPattern[] = [
+			{ row: 0, col: 0, size: 7 },
+			{ row: 0, col: count - 7, size: 7 },
+			{ row: count - 7, col: 0, size: 7 },
+		];
+		const positions = ALIGNMENT_POSITIONS[(count - 17) / 4] ?? [];
+		const last = positions.length - 1;
+		for (let i = 0; i <= last; i++) {
+			for (let j = 0; j <= last; j++) {
+				// The three that would sit on a finder are never placed
+				if ((i === 0 && (j === 0 || j === last)) || (i === last && j === 0)) continue;
+				patterns.push({ row: positions[i] - 2, col: positions[j] - 2, size: 5 });
+			}
+		}
+		return patterns;
+	}
+
+	/** Which modules belong to a solid pattern, indexed `row * count + col`. */
+	function solidMask(patterns: SolidPattern[], count: number): Uint8Array {
+		const mask = new Uint8Array(count * count);
+		for (const { row, col, size } of patterns) {
+			for (let r = 0; r < size; r++) {
+				for (let c = 0; c < size; c++) mask[(row + r) * count + col + c] = 1;
+			}
+		}
+		return mask;
+	}
+
+	function roundedSquare(x: number, y: number, side: number, r: number): string {
+		const edge = side - 2 * r;
+		return (
+			`M${x + r},${y}h${edge}a${r},${r} 0 0 1 ${r},${r}v${edge}` +
+			`a${r},${r} 0 0 1 ${-r},${r}h${-edge}a${r},${r} 0 0 1 ${-r},${-r}` +
+			`v${-edge}a${r},${r} 0 0 1 ${r},${-r}z`
+		);
+	}
+
+	/**
+	 * One pattern as an even-odd path: the ring, its light gap, the centre.
+	 * `offset` is the quiet zone, so the path is in viewBox units.
+	 */
+	function solidPatternPath(pattern: SolidPattern, offset: number): string {
+		const x = pattern.col + offset;
+		const y = pattern.row + offset;
+		const finder = pattern.size === 7;
+		return (
+			roundedSquare(x, y, pattern.size, finder ? 2 : 1.4) +
+			roundedSquare(x + 1, y + 1, pattern.size - 2, finder ? 1 : 0.6) +
+			roundedSquare(x + 2, y + 2, pattern.size - 4, finder ? 1 : 0.5)
+		);
+	}
+
 	function generateQRMatrix(text: string, level: ECLevel): boolean[][] {
 		const version = chooseVersion(text, level);
 		const size = version * 4 + 17;
@@ -874,6 +939,10 @@
 	const total_modules = $derived(module_count + margin * 2);
 	const viewbox = $derived(`0 0 ${total_modules} ${total_modules}`);
 	const radius = $derived(rounded ? 0.5 : 0);
+	const solid_patterns = $derived(rounded && matrix ? solidPatterns(module_count) : []);
+	const solid_mask = $derived(
+		solid_patterns.length ? solidMask(solid_patterns, module_count) : null,
+	);
 
 	// Logo dimensions (in viewBox units)
 	const logo_modules = $derived(Math.floor(module_count * logo_size));
@@ -955,7 +1024,7 @@
 			for (let r = 0; r < current.length; r++) {
 				const row = current[r];
 				for (let c = 0; c < row.length; c++) {
-					if (!row[c]) continue;
+					if (!row[c] || solid_mask?.[r * current.length + c]) continue;
 					const x = (c + margin) * px;
 					const y = (r + margin) * px;
 					if (rounded && supports_round) {
@@ -966,6 +1035,16 @@
 						ctx.fillRect(x, y, px, px);
 					}
 				}
+			}
+
+			// Finder and alignment patterns as solid shapes (see solidPatterns)
+			if (solid_patterns.length) {
+				ctx.save();
+				ctx.scale(px, px);
+				for (const pattern of solid_patterns) {
+					ctx.fill(new Path2D(solidPatternPath(pattern, margin)), 'evenodd');
+				}
+				ctx.restore();
 			}
 
 			// Optional centre logo (best effort — skipped if it can't be loaded
@@ -1044,7 +1123,7 @@
 			<!-- QR modules -->
 			{#each matrix as row, r}
 				{#each row as cell, c}
-					{#if cell}
+					{#if cell && !solid_mask?.[r * module_count + c]}
 						{#if rounded}
 							<rect
 								x={c + margin}
@@ -1064,6 +1143,14 @@
 						{/if}
 					{/if}
 				{/each}
+			{/each}
+
+			<!-- Finder and alignment patterns as solid shapes when rounded -->
+			{#each solid_patterns as pattern}
+				<path
+					d={solidPatternPath(pattern, margin)}
+					fill={foreground}
+					fill-rule="evenodd" />
 			{/each}
 
 			<!-- Logo overlay -->
