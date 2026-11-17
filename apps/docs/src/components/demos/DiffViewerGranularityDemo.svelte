@@ -7,16 +7,17 @@
 
 	const options: DiffGranularity[] = ['word', 'char', 'line'];
 	let granularity = $state<DiffGranularity>('word');
+	const labels: Record<DiffGranularity, string> = {
+		word: 'Words',
+		char: 'Characters',
+		line: 'Lines',
+	};
 </script>
 
 <div class="demo">
-	<ButtonGroup>
+	<ButtonGroup bind:value={granularity} dense>
 		{#each options as option (option)}
-			<Button
-				outline={granularity !== option}
-				onclick={() => (granularity = option)}>
-				{option}
-			</Button>
+			<Button value={option}>{labels[option]}</Button>
 		{/each}
 	</ButtonGroup>
 

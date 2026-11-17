@@ -519,7 +519,9 @@
 		font-family: var(--font-mono, ui-monospace, monospace);
 		font-variant-numeric: tabular-nums;
 		text-align: end;
-		vertical-align: top;
+		/* baseline, not top: the number is set smaller than the line, so top
+		   alignment floated it ~5px above the text it labels. */
+		vertical-align: baseline;
 		user-select: none;
 
 		&::before {
@@ -572,7 +574,7 @@
 	.text {
 		padding: 0.05rem 0.7rem;
 		line-height: inherit;
-		vertical-align: top;
+		vertical-align: baseline;
 
 		&.absent {
 			background: var(--color-bg-muted, transparent);
@@ -640,16 +642,34 @@
 		text-underline-offset: 0.18em;
 	}
 
+	/*
+	 * Changed words are small tinted chips. A deletion keeps its strike (the
+	 * non-colour cue that tells the two apart); an insertion is the plain tint —
+	 * an underline also ran under the leading space the renderer includes in a
+	 * span. The hairline margin keeps "though|and" from fusing into one word.
+	 */
+	.text :global(:is(ins, del)) {
+		border-radius: 0.2em;
+		padding-inline: 0.08em;
+		box-decoration-break: clone;
+		-webkit-box-decoration-break: clone;
+	}
+
 	.text :global(ins) {
-		background: var(--insert-bg);
-		text-decoration-line: underline;
-		text-decoration-color: var(--insert);
+		background: oklch(from var(--insert) l c h / 0.22);
+		text-decoration: none;
 	}
 
 	.text :global(del) {
 		background: var(--delete-bg);
 		text-decoration-line: line-through;
 		text-decoration-color: var(--delete);
+		color: var(--color-text-muted, currentcolor);
+	}
+
+	.text :global(del + ins),
+	.text :global(ins + del) {
+		margin-inline-start: 0.12em;
 	}
 
 	.gap td {
@@ -669,6 +689,19 @@
 		font-family: var(--font-sans, system-ui, sans-serif);
 		text-align: start;
 		cursor: pointer;
+
+		/* An unfold glyph, so the bar reads as something that opens. */
+		&::before {
+			content: '';
+			display: inline-block;
+			width: 1em;
+			height: 1em;
+			margin-inline-end: 0.4em;
+			vertical-align: -0.15em;
+			background: currentcolor;
+			mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 15 5 5 5-5M7 9l5-5 5 5'/%3E%3C/svg%3E")
+				center / contain no-repeat;
+		}
 		/* Colors on the base rule so they fade out; omitted in :hover so they
 		   snap in. */
 		transition:

@@ -14,15 +14,9 @@ The keeper's cottage was boarded at every window.`;
 </script>
 
 <div class="demo">
-	<ButtonGroup>
-		<Button outline={mode !== 'inline'} onclick={() => (mode = 'inline')}>
-			Inline
-		</Button>
-		<Button
-			outline={mode !== 'side-by-side'}
-			onclick={() => (mode = 'side-by-side')}>
-			Side by side
-		</Button>
+	<ButtonGroup bind:value={mode} dense>
+		<Button value="inline">Inline</Button>
+		<Button value="side-by-side">Side by side</Button>
 	</ButtonGroup>
 
 	<DiffViewer {before} {after} {mode} />

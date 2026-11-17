@@ -87,6 +87,9 @@
 
 	article {
 		display: grid;
+		/* Pack rows to the top so cards in one row share baselines; stretched
+		   rows pushed a one-line synopsis down to the middle. */
+		align-content: start;
 		gap: 0.375rem;
 		block-size: 100%;
 		padding: 0.75rem 0.875rem;
