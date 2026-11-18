@@ -132,3 +132,32 @@ describe('createAuthHandle user.image', () => {
 		expect(locals.user && 'image' in locals.user).toBe(false);
 	});
 });
+
+describe('createAuthHandle meta.ip_address', () => {
+	async function ipFor(getClientAddress: () => string | null) {
+		const event = makeEvent('https://app.example.test/page');
+		(event as { getClientAddress: () => string | null }).getClientAddress =
+			getClientAddress;
+		await makeHandle(false)({
+			event,
+			resolve: () => new Response('ok'),
+		} as unknown as HandleInput);
+		return (event.locals as unknown as { meta: { ip_address?: string } }).meta.ip_address;
+	}
+
+	it('leaves the address unset when getClientAddress throws (client hung up, prerender)', async () => {
+		const ip = await ipFor(() => {
+			throw new Error('Could not determine clientAddress');
+		});
+		expect(ip).toBeUndefined();
+	});
+
+	it('carries the client address', async () => {
+		expect(await ipFor(() => '203.0.113.7')).toBe('203.0.113.7');
+	});
+
+	it('leaves the address unset when getClientAddress returns nothing', async () => {
+		expect(await ipFor(() => null)).toBeUndefined();
+		expect(await ipFor(() => '')).toBeUndefined();
+	});
+});

@@ -119,8 +119,19 @@ function extractMeta(event: RequestEvent): UserSessionMeta {
 
 	const user_agent = request.headers.get('User-Agent') || undefined;
 
+	// getClientAddress throws when there is no address to read: in `vite dev` it
+	// reads the socket at call time, and a client that already hung up has none;
+	// prerendering has none either. Leave it unset rather than failing the request
+	// (it keys rate limits, so never substitute a made-up address).
+	let ip_address: string | undefined;
+	try {
+		ip_address = event.getClientAddress?.() || undefined;
+	} catch {
+		ip_address = undefined;
+	}
+
 	return {
-		ip_address: event.getClientAddress?.() || undefined,
+		ip_address,
 		city: cf?.city || undefined,
 		country: cf?.country || undefined,
 		latitude: cf?.latitude || undefined,
