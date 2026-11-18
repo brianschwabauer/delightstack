@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
 /**
- * ContextMenu's own rows: shortcut keys read the way the platform writes them (⇧⌘G on
- * Apple, Shift+Ctrl+G elsewhere), and once any row has an icon, rows without one keep an
- * empty icon column so the labels line up. Layout itself is checked in a browser; this
- * covers the markup that drives it.
+ * ContextMenu's own rows: a shortcut shows one keycap per key, printed the way the
+ * platform writes it (⇧ ⌘ G on Apple, ⇧ Ctrl G elsewhere), and once any row has an icon,
+ * rows without one keep an empty icon column so the labels line up. Layout itself is
+ * checked in a browser; this covers the markup that drives it. The key table itself is
+ * tested in shortcut-keys.test.ts.
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Component } from 'svelte';
@@ -64,25 +65,59 @@ async function openMenu(options: ContextMenuOptions, platform = 'Linux x86_64') 
 
 const Icon = (() => {}) as unknown as Component<Record<string, unknown>>;
 
+/** Each row's keycaps: what is printed on the cap, and the name a glyph cap carries */
+function capsOf(rows: HTMLElement[]) {
+	return rows.map((row) =>
+		Array.from(row.querySelectorAll('.shortcut kbd')).map((kbd) => {
+			const glyph = kbd.querySelector('[aria-hidden="true"]');
+			return glyph
+				? `${glyph.textContent?.trim()}|${kbd.getAttribute('title')}`
+				: kbd.textContent?.trim();
+		}),
+	);
+}
+
 describe('ContextMenu shortcut keys', () => {
 	const actions = [
-		{ label: 'Ungroup', shortcut: ['Shift', 'Ctrl', 'G'] },
-		{ label: 'Delete', shortcut: ['Del'] },
+		{ label: 'Ungroup', shortcut: ['Shift', 'Mod', 'G'] },
+		{ label: 'Go to line', shortcut: ['ctrl', 'alt', 'g'] },
+		{ label: 'Delete', shortcut: ['Delete'] },
 	];
 
-	it('joins keys with "+" off Apple platforms', async () => {
+	it('draws one cap per key, with no "+" between them, off Apple platforms', async () => {
 		const rows = await openMenu({ actions });
-		expect(
-			rows.map((row) => row.querySelector('.shortcut')?.textContent?.trim()),
-		).toEqual(['Shift+Ctrl+G', 'Del']);
+		expect(capsOf(rows)).toEqual([
+			['⇧|Shift', 'Ctrl', 'G'],
+			['Ctrl', 'Alt', 'G'],
+			['Del'],
+		]);
+		expect(rows[0]?.querySelector('.shortcut')?.textContent).not.toContain('+');
 	});
 
-	it('keeps Apple glyphs adjacent', async () => {
-		const rows = await openMenu(
-			{ actions: [{ label: 'Ungroup', shortcut: ['⇧', '⌘', 'G'] }] },
-			'MacIntel',
-		);
-		expect(rows[0]?.querySelector('.shortcut')?.textContent?.trim()).toBe('⇧⌘G');
+	it('prints Apple glyphs on Apple platforms', async () => {
+		const rows = await openMenu({ actions }, 'MacIntel');
+		expect(capsOf(rows)).toEqual([
+			['⇧|Shift', '⌘|Command', 'G'],
+			['⌃|Control', '⌥|Option', 'G'],
+			['Del'],
+		]);
+	});
+
+	it('hides a glyph from assistive tech and gives them its name', async () => {
+		const rows = await openMenu({
+			actions: [{ label: 'Ungroup', shortcut: ['Shift', 'G'] }],
+		});
+		const shift = rows[0]?.querySelector('.shortcut kbd');
+		expect(shift?.querySelector('[aria-hidden="true"]')?.textContent).toBe('⇧');
+		expect(shift?.querySelector('.name')?.textContent).toBe('Shift');
+	});
+
+	it("keeps a danger row's caps out of the error color", async () => {
+		const rows = await openMenu({
+			actions: [{ label: 'Delete', shortcut: ['Delete'], danger: true }],
+		});
+		expect(rows[0]?.querySelector('.label')?.classList.contains('danger')).toBe(true);
+		expect(rows[0]?.querySelector('.shortcut .danger, .shortcut.danger')).toBeNull();
 	});
 });
 

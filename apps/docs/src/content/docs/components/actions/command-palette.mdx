@@ -24,9 +24,9 @@ ${'  '}import { CommandPalette, Button } from '@delightstack/components';
 ${'  '}let open = $state(false);
 
 ${'  '}const commands = [
-${'  '}${'  '}{ id: 'new', title: 'New file', category: 'File', shortcut: ['Ctrl', 'N'], onselect: () => {} },
-${'  '}${'  '}{ id: 'save', title: 'Save', category: 'File', shortcut: ['Ctrl', 'S'], onselect: () => {} },
-${'  '}${'  '}{ id: 'copy', title: 'Copy', category: 'Edit', shortcut: ['Ctrl', 'C'], onselect: () => {} },
+${'  '}${'  '}{ id: 'new', title: 'New file', category: 'File', shortcut: ['Mod', 'N'], onselect: () => {} },
+${'  '}${'  '}{ id: 'save', title: 'Save', category: 'File', shortcut: ['Mod', 'S'], onselect: () => {} },
+${'  '}${'  '}{ id: 'copy', title: 'Copy', category: 'Edit', shortcut: ['Mod', 'C'], onselect: () => {} },
 ${'  '}${'  '}{ id: 'theme', title: 'Toggle theme', category: 'View', onselect: () => {} },
 ${'  '}];
 </script>
@@ -79,7 +79,7 @@ The palette automatically registers a global `Ctrl/Cmd + K` keyboard shortcut to
       description: 'Create a new project',
       category: 'Projects',
       icon: PlusIcon,
-      shortcut: ['Ctrl', 'N'],
+      shortcut: ['Mod', 'N'],
       onselect: () => goto('/projects/new')
     },
     {
@@ -88,7 +88,7 @@ The palette automatically registers a global `Ctrl/Cmd + K` keyboard shortcut to
       description: 'Open application settings',
       category: 'Navigation',
       icon: SettingsIcon,
-      shortcut: ['Ctrl', ','],
+      shortcut: ['Mod', ','],
       onselect: () => goto('/settings')
     },
     {
@@ -212,7 +212,11 @@ interface CommandOption {
   /** Optional icon component */
   icon?: Component;
 
-  /** Keyboard shortcut keys to display (e.g. ['Ctrl', 'K']) */
+  /**
+   * Keys that run the command, shown as keycaps (e.g. ['Mod', 'K']). `Mod` is ⌘ on
+   * Apple platforms and Ctrl elsewhere; Shift, Enter, Backspace, Tab and the arrows
+   * print as glyphs, and Ctrl and Alt as ⌃ and ⌥ on Apple. Display only.
+   */
   shortcut?: string[];
 
   /** Additional search keywords */

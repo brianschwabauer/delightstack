@@ -11,6 +11,7 @@
 	import Popover from './Popover.svelte';
 	import List from './../display/List.svelte';
 	import ListItem from './../display/ListItem.svelte';
+	import Shortcut from './Shortcut.svelte';
 
 	export interface ContextMenuOptions {
 		/** The list of action menu items to show in the context menu */
@@ -32,10 +33,12 @@
 			/** An optional snippet that will be used to render the content of the action (instead of using 'label') */
 			snippet?: Snippet<[ContextMenuOptions & { el: HTMLElement }]>;
 			/**
-			 * The keys that trigger this action elsewhere, shown on the item's trailing
-			 * edge (e.g. `['⌘', 'D']` on Apple platforms, `['Ctrl', 'D']` elsewhere). Apple
-			 * platforms show the keys together (⌘D); others join them with "+" (Ctrl+D).
-			 * Display only; the menu doesn't bind them.
+			 * The keys that trigger this action elsewhere, shown as quiet keycaps on the
+			 * item's trailing edge (e.g. `['Mod', 'D']`). Key names match case-insensitively
+			 * and print as the platform writes them: `Mod` is ⌘ on Apple platforms and Ctrl
+			 * elsewhere; Shift, Enter, Backspace, Tab and the arrows print as glyphs everywhere,
+			 * and Ctrl and Alt as ⌃ and ⌥ on Apple. Any other key prints as given (a single
+			 * letter in upper case). Display only; the menu doesn't bind them.
 			 */
 			shortcut?: string[];
 			/**
@@ -50,11 +53,6 @@
 		/** Use the compact list rows (for pointer menus with many actions) */
 		dense?: boolean;
 	}
-
-	/** Apple platforms show a shortcut's keys as adjacent glyphs (⇧⌘G); elsewhere they are
-	 * joined with "+" (Shift+Ctrl+G). Same check as the editor's CommandMenu. */
-	const IS_APPLE =
-		typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '');
 
 	/** The currently displayed context mneu */
 	let activeContextMenu = $state<(ContextMenuOptions & { el: HTMLElement }) | undefined>(
@@ -211,7 +209,7 @@
 							<span class="label" class:danger={action.danger}>{action.label}</span>
 							{#if action.shortcut?.length}
 								<span class="shortcut">
-									<kbd>{action.shortcut.join(IS_APPLE ? '' : '+')}</kbd>
+									<Shortcut keys={action.shortcut} />
 								</span>
 							{/if}
 						{/if}
@@ -242,16 +240,13 @@
 	.danger {
 		color: var(--color-error);
 	}
-	/* Shortcuts read like a native menu's: quiet text on the trailing edge, not keycaps */
+	/* Quiet keycaps on the trailing edge, centered on the row; a danger row's stay muted */
 	.shortcut {
 		flex: none;
+		display: inline-flex;
+		align-items: center;
+		align-self: center;
 		padding-left: 2rem;
-		color: var(--color-text-muted);
-		font-size: 0.85em;
-		font-variant-numeric: tabular-nums;
-		kbd {
-			font: inherit;
-		}
 	}
 	/* One hairline between groups, inset to the item content (ListItem's row padding) */
 	.separator {

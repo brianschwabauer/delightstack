@@ -173,24 +173,17 @@ ${'  '}</span>
 
 ### Groups, Shortcuts and Destructive Actions
 
-Give related actions the same `group` and a hairline separates each group from the next. The divider is drawn wherever the group changes, so you can leave actions out conditionally without stranding one. `shortcut` shows the keys that run the action elsewhere on the item's trailing edge (display only). Apple platforms show the keys together as glyphs (⇧⌘G) and other platforms join them with "+" (Shift+Ctrl+G), so pass each platform's own key names. `danger` puts a destructive action in the error color, and `dense` uses compact rows, which suit a long pointer menu.
+Give related actions the same `group` and a hairline separates each group from the next. The divider is drawn wherever the group changes, so you can leave actions out conditionally without stranding one. `shortcut` shows the keys that run the action elsewhere as quiet keycaps on the item's trailing edge (display only). Pass key names and each prints the way the platform writes it: `Mod` is the platform's main modifier (⌘ on Apple platforms, Ctrl elsewhere), Shift prints ⇧, Ctrl and Alt print ⌃ and ⌥ on Apple platforms, and Enter, Backspace, Tab and the arrow keys print as glyphs. Names match case-insensitively, and any other key prints as given. `danger` puts a destructive action in the error color, and `dense` uses compact rows, which suit a long pointer menu.
 
-<ComponentPreview code={`<script>
-${'  '}const apple = /Mac|iPhone|iPad/.test(navigator.platform);
-${'  '}const mod = apple ? '⌘' : 'Ctrl';
-${'  '}const shift = apple ? '⇧' : 'Shift';
-${'  '}const del = apple ? '⌫' : 'Del';
-</script>
-
-<div {@attach contextMenu({
+<ComponentPreview code={`<div {@attach contextMenu({
 ${'  '}dense: true,
 ${'  '}actions: [
-${'  '}${'  '}{ label: 'Cut', shortcut: [mod, 'X'], group: 'edit', onclick: cut },
-${'  '}${'  '}{ label: 'Copy', shortcut: [mod, 'C'], group: 'edit', onclick: copy },
-${'  '}${'  '}{ label: 'Duplicate', shortcut: [mod, 'D'], group: 'edit', onclick: duplicate },
-${'  '}${'  '}{ label: 'Bring to front', shortcut: [shift, ']'], group: 'arrange', onclick: toFront },
-${'  '}${'  '}{ label: 'Send to back', shortcut: [shift, '['], group: 'arrange', onclick: toBack },
-${'  '}${'  '}{ label: 'Delete', shortcut: [del], group: 'delete', danger: true, onclick: remove },
+${'  '}${'  '}{ label: 'Cut', shortcut: ['Mod', 'X'], group: 'edit', onclick: cut },
+${'  '}${'  '}{ label: 'Copy', shortcut: ['Mod', 'C'], group: 'edit', onclick: copy },
+${'  '}${'  '}{ label: 'Duplicate', shortcut: ['Mod', 'D'], group: 'edit', onclick: duplicate },
+${'  '}${'  '}{ label: 'Bring to front', shortcut: ['Shift', ']'], group: 'arrange', onclick: toFront },
+${'  '}${'  '}{ label: 'Send to back', shortcut: ['Shift', '['], group: 'arrange', onclick: toBack },
+${'  '}${'  '}{ label: 'Delete', shortcut: ['Delete'], group: 'delete', danger: true, onclick: remove },
 ${'  '}]
 })}>
 ${'  '}Right-click for editing actions

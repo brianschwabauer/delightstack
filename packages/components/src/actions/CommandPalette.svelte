@@ -18,7 +18,14 @@
 		/** Optional icon component */
 		icon?: Component;
 
-		/** Keyboard shortcut keys to display (e.g. ['Ctrl', 'K']) */
+		/**
+		 * The keys that run this command, shown as keycaps on the row's trailing edge
+		 * (e.g. `['Mod', 'K']`). Key names match case-insensitively and print as the
+		 * platform writes them: `Mod` is ⌘ on Apple platforms and Ctrl elsewhere; Shift,
+		 * Enter, Backspace, Tab and the arrows print as glyphs everywhere, and Ctrl and Alt
+		 * as ⌃ and ⌥ on Apple. Any other key prints as given (a single letter in upper
+		 * case). Display only; the palette doesn't bind them.
+		 */
 		shortcut?: string[];
 
 		/** Additional search keywords */
@@ -258,6 +265,7 @@
 	import { focusTrap, ripple } from '@delightstack/utilities';
 	import { portal } from './Portal.svelte';
 	import { scrollbar } from './scrollbar.js';
+	import Shortcut from './Shortcut.svelte';
 
 	const propId = $props.id();
 	let {
@@ -669,11 +677,7 @@
 								{/if}
 							</div>
 							{#if command.shortcut && command.shortcut.length > 0}
-								<div class="shortcut">
-									{#each command.shortcut as key}
-										<kbd>{key}</kbd>
-									{/each}
-								</div>
+								<Shortcut keys={command.shortcut} />
 							{/if}
 						</div>
 					{/each}
@@ -989,34 +993,6 @@
 
 			.comfortable & {
 				font-size: 0.78rem;
-			}
-		}
-
-		.shortcut {
-			flex-shrink: 0;
-			display: flex;
-			align-items: center;
-			gap: 0.25rem;
-
-			kbd {
-				display: inline-flex;
-				align-items: center;
-				justify-content: center;
-				min-width: 1.5em;
-				height: 1.5em;
-				padding: 0 0.35em;
-				font-family: inherit;
-				font-size: 0.7rem;
-				font-weight: 500;
-				color: var(--color-text-muted);
-				background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
-				border: 1px solid var(--color-border);
-				border-radius: var(--radius-xl);
-				@supports (corner-shape: squircle) {
-					corner-shape: squircle;
-					border-radius: calc(var(--radius-xl) * var(--squircle-ratio, 2));
-				}
-				line-height: 1;
 			}
 		}
 	}

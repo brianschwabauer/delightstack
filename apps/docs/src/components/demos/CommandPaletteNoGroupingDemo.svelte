@@ -4,12 +4,12 @@
 	let open = $state(false);
 
 	const commands = [
-		{ id: 'new', title: 'New file', shortcut: ['Ctrl', 'N'], onselect: () => {} },
-		{ id: 'open', title: 'Open file', shortcut: ['Ctrl', 'O'], onselect: () => {} },
-		{ id: 'save', title: 'Save', shortcut: ['Ctrl', 'S'], onselect: () => {} },
-		{ id: 'cut', title: 'Cut', shortcut: ['Ctrl', 'X'], onselect: () => {} },
-		{ id: 'copy', title: 'Copy', shortcut: ['Ctrl', 'C'], onselect: () => {} },
-		{ id: 'paste', title: 'Paste', shortcut: ['Ctrl', 'V'], onselect: () => {} },
+		{ id: 'new', title: 'New file', shortcut: ['Mod', 'N'], onselect: () => {} },
+		{ id: 'open', title: 'Open file', shortcut: ['Mod', 'O'], onselect: () => {} },
+		{ id: 'save', title: 'Save', shortcut: ['Mod', 'S'], onselect: () => {} },
+		{ id: 'cut', title: 'Cut', shortcut: ['Mod', 'X'], onselect: () => {} },
+		{ id: 'copy', title: 'Copy', shortcut: ['Mod', 'C'], onselect: () => {} },
+		{ id: 'paste', title: 'Paste', shortcut: ['Mod', 'V'], onselect: () => {} },
 	];
 </script>
 
