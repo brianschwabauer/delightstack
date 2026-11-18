@@ -1,5 +1,12 @@
 # @delightstack/database
 
+## 3.0.5
+
+### Patch Changes
+
+- Updated dependencies [9c89d53]
+  - @delightstack/utilities@1.3.3
+
 ## 3.0.4
 
 ### Patch Changes

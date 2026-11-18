@@ -1,5 +1,12 @@
 # @delightstack/auth
 
+## 1.6.1
+
+### Patch Changes
+
+- Updated dependencies [9c89d53]
+  - @delightstack/utilities@1.3.3
+
 ## 1.6.0
 
 ### Minor Changes
