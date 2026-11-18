@@ -1,5 +1,18 @@
 # @delightstack/components
 
+## 2.2.2
+
+### Patch Changes
+
+- fcf4e4a: Alert moves focus to its Cancel button when it opens, so keyboard focus is never left on the trigger behind the dialog; focus still returns to the trigger when it closes. Modal gains an `initial_focus` prop (an element, a selector, or a function returning one) for where focus goes on open; the default is unchanged.
+- 9a0d3a6: DiffViewer polish: line numbers and text align on the baseline, so a number no longer floats above the line it labels. Changed words are small tinted chips: an insertion is a plain tint with no underline, a deletion keeps its strike in muted text, and a hairline gap keeps an adjacent deletion and insertion from reading as one word. The bar that expands hidden lines shows an unfold glyph.
+- 9c89d53: focusTrap activates even when its container has no tabbable node yet: the trap falls back to the container itself, so the Gallery lightbox (and Modal, Popover, CommandPalette) now trap focus, close on Escape and return focus to the trigger. Activation failures are reported instead of swallowed. Gallery lightbox takes initial focus.
+
+  renderHTML gives headings an `id` from their text (`heading_ids` option, default on) and exports `slugifyHeading()` so consumers can build matching anchors.
+
+- Updated dependencies [9c89d53]
+  - @delightstack/utilities@1.3.3
+
 ## 2.2.1
 
 ### Patch Changes
