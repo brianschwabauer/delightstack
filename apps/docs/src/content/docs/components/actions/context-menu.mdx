@@ -69,7 +69,7 @@ ${'  '}Right-click in this area
 
 ### With Icons
 
-Pass a Svelte component to an action's `icon` property to render it before the label.
+Pass a Svelte component to an action's `icon` property to render it before the label. When some actions have an icon and others don't, the ones without keep an empty icon column so every label lines up.
 
 <ComponentPreview code={`<script>
 ${'  '}import { contextMenu, ContextMenu } from '@delightstack/components';
@@ -173,17 +173,24 @@ ${'  '}</span>
 
 ### Groups, Shortcuts and Destructive Actions
 
-Give related actions the same `group` and a hairline separates each group from the next. The divider is drawn wherever the group changes, so you can leave actions out conditionally without stranding one. `shortcut` shows the keys that run the action elsewhere on the item's trailing edge (display only), and `danger` puts a destructive action in the error color. `dense` uses compact rows, which suit a long pointer menu.
+Give related actions the same `group` and a hairline separates each group from the next. The divider is drawn wherever the group changes, so you can leave actions out conditionally without stranding one. `shortcut` shows the keys that run the action elsewhere on the item's trailing edge (display only). Apple platforms show the keys together as glyphs (⇧⌘G) and other platforms join them with "+" (Shift+Ctrl+G), so pass each platform's own key names. `danger` puts a destructive action in the error color, and `dense` uses compact rows, which suit a long pointer menu.
 
-<ComponentPreview code={`<div {@attach contextMenu({
+<ComponentPreview code={`<script>
+${'  '}const apple = /Mac|iPhone|iPad/.test(navigator.platform);
+${'  '}const mod = apple ? '⌘' : 'Ctrl';
+${'  '}const shift = apple ? '⇧' : 'Shift';
+${'  '}const del = apple ? '⌫' : 'Del';
+</script>
+
+<div {@attach contextMenu({
 ${'  '}dense: true,
 ${'  '}actions: [
-${'  '}${'  '}{ label: 'Cut', shortcut: ['⌘', 'X'], group: 'edit', onclick: cut },
-${'  '}${'  '}{ label: 'Copy', shortcut: ['⌘', 'C'], group: 'edit', onclick: copy },
-${'  '}${'  '}{ label: 'Duplicate', shortcut: ['⌘', 'D'], group: 'edit', onclick: duplicate },
-${'  '}${'  '}{ label: 'Bring to front', shortcut: ['⇧', ']'], group: 'arrange', onclick: toFront },
-${'  '}${'  '}{ label: 'Send to back', shortcut: ['⇧', '['], group: 'arrange', onclick: toBack },
-${'  '}${'  '}{ label: 'Delete', shortcut: ['⌫'], group: 'delete', danger: true, onclick: remove },
+${'  '}${'  '}{ label: 'Cut', shortcut: [mod, 'X'], group: 'edit', onclick: cut },
+${'  '}${'  '}{ label: 'Copy', shortcut: [mod, 'C'], group: 'edit', onclick: copy },
+${'  '}${'  '}{ label: 'Duplicate', shortcut: [mod, 'D'], group: 'edit', onclick: duplicate },
+${'  '}${'  '}{ label: 'Bring to front', shortcut: [shift, ']'], group: 'arrange', onclick: toFront },
+${'  '}${'  '}{ label: 'Send to back', shortcut: [shift, '['], group: 'arrange', onclick: toBack },
+${'  '}${'  '}{ label: 'Delete', shortcut: [del], group: 'delete', danger: true, onclick: remove },
 ${'  '}]
 })}>
 ${'  '}Right-click for editing actions

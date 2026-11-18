@@ -2,35 +2,52 @@
 	import { ContextMenu, contextMenu } from '@delightstack/components/actions';
 
 	let lastAction = $state('');
+
+	// Show each platform's own keys: glyphs on Apple (⌘X), names elsewhere (Ctrl+X)
+	const apple =
+		typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '');
+	const mod = apple ? '⌘' : 'Ctrl';
+	const shift = apple ? '⇧' : 'Shift';
+	const del = apple ? '⌫' : 'Del';
 </script>
 
 <div
 	{@attach contextMenu({
 		dense: true,
 		actions: [
-			{ label: 'Cut', shortcut: ['⌘', 'X'], group: 'edit', onclick: () => (lastAction = 'Cut') },
-			{ label: 'Copy', shortcut: ['⌘', 'C'], group: 'edit', onclick: () => (lastAction = 'Copy') },
+			{
+				label: 'Cut',
+				shortcut: [mod, 'X'],
+				group: 'edit',
+				onclick: () => (lastAction = 'Cut'),
+			},
+			{
+				label: 'Copy',
+				shortcut: [mod, 'C'],
+				group: 'edit',
+				onclick: () => (lastAction = 'Copy'),
+			},
 			{
 				label: 'Duplicate',
-				shortcut: ['⌘', 'D'],
+				shortcut: [mod, 'D'],
 				group: 'edit',
 				onclick: () => (lastAction = 'Duplicate'),
 			},
 			{
 				label: 'Bring to front',
-				shortcut: ['⇧', ']'],
+				shortcut: [shift, ']'],
 				group: 'arrange',
 				onclick: () => (lastAction = 'Bring to front'),
 			},
 			{
 				label: 'Send to back',
-				shortcut: ['⇧', '['],
+				shortcut: [shift, '['],
 				group: 'arrange',
 				onclick: () => (lastAction = 'Send to back'),
 			},
 			{
 				label: 'Delete',
-				shortcut: ['⌫'],
+				shortcut: [del],
 				group: 'delete',
 				danger: true,
 				onclick: () => (lastAction = 'Delete'),
