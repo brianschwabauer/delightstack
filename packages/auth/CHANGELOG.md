@@ -1,5 +1,11 @@
 # @delightstack/auth
 
+## 1.6.2
+
+### Patch Changes
+
+- 10dc66d: The auth handle no longer fails a request when `getClientAddress()` throws, as it does in `vite dev` once the client has hung up and during prerendering; `meta.ip_address` is left unset instead.
+
 ## 1.6.1
 
 ### Patch Changes
