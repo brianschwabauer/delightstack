@@ -1,5 +1,11 @@
 # @delightstack/components
 
+## 2.3.1
+
+### Patch Changes
+
+- ed8d027: ListItem: a deselected row no longer flashes `--color-text` (white in dark mode) as its highlight fades out; the highlight keeps the selected colour and stays under the label.
+
 ## 2.3.0
 
 ### Minor Changes
