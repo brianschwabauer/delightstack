@@ -630,6 +630,7 @@
 	}
 	.text-content {
 		position: relative;
+		isolation: isolate;
 		flex: 1;
 		/* Match the row's full height so the active background fills it (see the
 		 * align-self note on a/button/label). */
@@ -658,10 +659,14 @@
 				);
 			}
 			background-color: var(--color-text);
+			/* Hold the colour until the fade-out ends: a deselected row
+			   otherwise snaps to --color-text (white in dark mode) and fades
+			   that out, flashing on every keyboard move. */
 			transition:
 				opacity 300ms ease,
-				border-radius 150ms ease;
-			z-index: 0;
+				border-radius 150ms ease,
+				background-color 0ms linear 300ms;
+			z-index: -1;
 		}
 
 		li.dense & {
@@ -697,6 +702,7 @@
 		 * front keeps it stable, so the press just smoothly scales the
 		 * background with the content. */
 		position: relative;
+		isolation: isolate;
 		display: flex;
 		align-items: center;
 		/* Fill the full list-item width so the hover/active background spans
@@ -767,10 +773,15 @@
 					(var(--_radius) - var(--border-inset)) * var(--squircle-ratio, 2)
 				);
 			}
+			/* Always under the label (the row isolates), so a fading highlight
+			   never washes over the text; the delayed background-color keeps
+			   the selected colour through the fade-out (see .text-content). */
+			z-index: -1;
 			background-color: var(--color-text);
 			transition:
 				opacity 300ms ease,
-				border-radius 150ms ease;
+				border-radius 150ms ease,
+				background-color 0ms linear 300ms;
 		}
 	}
 	a[aria-disabled='true'] {
