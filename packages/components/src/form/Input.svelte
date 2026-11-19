@@ -2720,12 +2720,28 @@
 		gap: 0.4em;
 		flex: 1;
 		min-width: 0;
-		padding: 0.45em 0;
+		/* A one-row field is exactly --_height in every density, with the row
+		   centered in it, so the resting label, a leading icon and the typed
+		   text share one center line (and a dense Input/Select/Button row still
+		   lands on one height). The padding centers the 1.9em .chip-input row;
+		   the floor keeps some air at very small height ratios. */
+		box-sizing: border-box;
+		min-height: var(--_height);
+		padding-block: max(
+			calc(var(--_font) * 0.25),
+			calc((var(--_height) - var(--_font) * 1.9) / 2)
+		);
 	}
 
-	/* Keep chips clear of the floated label straddling the top edge */
-	.input.has-label .chips {
-		padding-top: 0.7em;
+	/* Invisible strut holding the first row at the .chip-input's 1.9em even
+	   once the input wraps to a later row. A row of chips alone is only a
+	   chip tall, which would start it at the top padding, into the floated
+	   label straddling the top edge. The negative margin cancels the gap so
+	   the strut takes no horizontal room. */
+	.chips::before {
+		content: '';
+		height: calc(var(--_font) * 1.9);
+		margin-inline-end: -0.4em;
 	}
 
 	.chip {
@@ -2742,6 +2758,12 @@
 		transition:
 			background var(--_duration) var(--_ease),
 			scale 150ms var(--_ease);
+	}
+
+	/* Dense leaves the least room above the row, so slim the chip to keep it
+	   clear of the floated label's descenders straddling the top edge. */
+	.input.dense .chip {
+		padding-block: 0.1em;
 	}
 
 	.chip:active {
