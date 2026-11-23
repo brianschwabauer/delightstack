@@ -10,6 +10,7 @@ import PopoverHoverDemo from '../../../../components/demos/PopoverHoverDemo.svel
 import PopoverContextMenuDemo from '../../../../components/demos/PopoverContextMenuDemo.svelte';
 import PopoverFocusDemo from '../../../../components/demos/PopoverFocusDemo.svelte';
 import PopoverDenseDemo from '../../../../components/demos/PopoverDenseDemo.svelte';
+import PopoverEdgeDemo from '../../../../components/demos/PopoverEdgeDemo.svelte';
 
 ## Import
 
@@ -168,6 +169,18 @@ Control the padding with `dense` or `comfortable` props.
 <Popover>Default</Popover>
 <Popover comfortable>Spacious</Popover>`}>
 	<PopoverDenseDemo client:only="svelte" />
+</ComponentPreview>
+
+### At the Window Edges
+
+A popover that would leave the window flips to the other side of its trigger and shifts along the edge to stay inside, with or without an arrow.
+
+<ComponentPreview
+	code={`<Button bind:button_element={ref_element}>Bottom right</Button>
+<Popover {ref_element} open_on_click arrow={false} placement="bottom">
+${'  '}${'  '}<p style="width: 240px">Stays inside the window.</p>
+</Popover>`}>
+	<PopoverEdgeDemo client:only="svelte" />
 </ComponentPreview>
 
 ## Props

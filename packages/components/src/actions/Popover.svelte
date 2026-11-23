@@ -441,6 +441,17 @@
 		return { arrow, shift, start_radius, end_radius };
 	}
 
+	/**
+	 * The least shift that keeps a box starting at `start` (unshifted, px) and
+	 * `length` long inside `viewport` with VIEWPORT_MARGIN to spare. A box
+	 * longer than the viewport keeps its start edge in view.
+	 */
+	function fitShift(start: number, length: number, viewport: number) {
+		const shift_min = VIEWPORT_MARGIN - start;
+		const shift_max = viewport - VIEWPORT_MARGIN - length - start;
+		return Math.min(Math.max(0, shift_min), Math.max(shift_min, shift_max));
+	}
+
 	/** Builds the per-corner radius override map from a resolveArrowAlongEdge result */
 	function cornerOverrides(
 		start: Corner,
@@ -592,6 +603,14 @@
 					resolved.end_radius,
 				);
 			}
+		} else if (realPlacement.startsWith('top') || realPlacement.startsWith('bottom')) {
+			// No arrow to keep on the target: only shift along the edge as far as
+			// it takes to stay on screen (the browser never shifts an anchored box)
+			shiftX = fitShift(popRect.left - shiftX, popRect.width, window.innerWidth);
+			shiftY = 0;
+		} else {
+			shiftY = fitShift(popRect.top - shiftY, popRect.height, window.innerHeight);
+			shiftX = 0;
 		}
 
 		// Hit box for hover popovers
