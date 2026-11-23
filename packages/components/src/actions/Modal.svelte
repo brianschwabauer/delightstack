@@ -309,15 +309,12 @@
 		justify-content: center;
 		pointer-events: none;
 
+		/* No clip here: this box is the whole viewport and the panel never
+		   reaches its edges. A squircle clip on it made Chrome raster a
+		   viewport-sized mask on every frame of the open animation. */
 		@media (min-width: 768px) {
-			overflow: hidden;
 			grid-template-rows: max-content;
 			grid-template-columns: max-content;
-			border-radius: var(--_radius);
-			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
-				border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
-			}
 		}
 
 		header {
@@ -423,11 +420,12 @@
 			   bottom edge as from the left and right (the top is the header's) */
 			padding: 2rem 2.5rem 2.5rem;
 			/* The body is the scroll container, so its own rounded clip is what
-			   actually crops the sticky header/footer. Match the panel's squircle
-			   corners — without this their square boxes bleed over the curve. */
+			   actually crops the sticky header/footer — without it their square
+			   boxes bleed over the panel's curve. */
 			border-radius: var(--_radius);
 			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
+				/* a round clip at the doubled radius sits inside the squircle panel;
+				   a squircle clip makes Chrome mask every composited child */
 				border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
 			}
 			/* The footer carries its own bottom spacing (and must end flush with
