@@ -1,5 +1,12 @@
 # @delightstack/components
 
+## 2.3.3
+
+### Patch Changes
+
+- 760e513: Modal opens without rastering squircle masks on every frame: the full-viewport `.modal` box no longer clips (the panel never reaches its edges), and the scrolling body clips to a round radius at the doubled squircle size, which sits inside the squircle panel. Chrome built a full-size mask layer for every squircle clip and repainted it through the open animation. The panel surface and close button keep their squircle corners, and the mobile layout is unchanged.
+- b57f3f6: Popover: an arrowless (`arrow={false}`) or `transparent` popover now shifts along its edge to stay inside the window, like one with an arrow. Before, a popover anchored near the right or bottom of the window hung off screen.
+
 ## 2.3.2
 
 ### Patch Changes
